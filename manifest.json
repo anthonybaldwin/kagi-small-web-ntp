@@ -1,9 +1,26 @@
 {
     "manifest_version": 3,
-    "name": "Kagi NTP",
-    "version": "0.1",
+    "name": "Kagi Small Web NTP",
+    "version": "0.2",
+    "description": "New tab page that opens Kagi Small Web or Kagi",
+    "icons": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    },
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "icons/icon16.png",
+            "48": "icons/icon48.png",
+            "128": "icons/icon128.png"
+        }
+    },
     "chrome_url_overrides": {
         "newtab": "index.html"
-    }
- 
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "permissions": ["contextMenus", "storage"]
 }
