@@ -83,3 +83,75 @@ async function updateIcon(enabled) {
 chrome.storage.sync.get(['smallWebEnabled'], (result) => {
     updateIcon(result.smallWebEnabled || false);
 });
+
+// Dynamically register block-focus content script and header-stripping rule
+// for custom URLs so they can load in the iframe.
+const CUSTOM_URL_SCRIPT_ID = 'block-focus-custom-url';
+const CUSTOM_URL_RULE_ID = 2; // Rule ID 1 is used by the static kagi.com rule
+
+async function updateCustomUrlRules(customUrl) {
+    // Always remove the old dynamic rule first
+    await chrome.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: [CUSTOM_URL_RULE_ID]
+    });
+
+    // Always unregister old content script
+    try {
+        await chrome.scripting.unregisterContentScripts({ ids: [CUSTOM_URL_SCRIPT_ID] });
+    } catch (e) {
+        // Script wasn't registered, that's fine
+    }
+
+    if (!customUrl) return;
+
+    try {
+        const url = new URL(customUrl);
+        // Skip if already covered by the static kagi.com rules
+        if (url.hostname === 'kagi.com') return;
+
+        const pattern = url.origin + '/*';
+
+        // Add header-stripping rule for the custom domain
+        await chrome.declarativeNetRequest.updateDynamicRules({
+            addRules: [{
+                id: CUSTOM_URL_RULE_ID,
+                priority: 1,
+                action: {
+                    type: 'modifyHeaders',
+                    responseHeaders: [
+                        { header: 'X-Frame-Options', operation: 'remove' },
+                        { header: 'Content-Security-Policy', operation: 'remove' }
+                    ]
+                },
+                condition: {
+                    urlFilter: '||' + url.hostname,
+                    resourceTypes: ['sub_frame']
+                }
+            }]
+        });
+
+        // Register content script for focus blocking
+        await chrome.scripting.registerContentScripts([{
+            id: CUSTOM_URL_SCRIPT_ID,
+            matches: [pattern],
+            js: ['block-focus.js'],
+            runAt: 'document_start',
+            world: 'MAIN',
+            allFrames: true
+        }]);
+    } catch (e) {
+        // Invalid URL, skip registration
+    }
+}
+
+// Register on startup
+chrome.storage.sync.get(['customUrl'], (result) => {
+    updateCustomUrlRules(result.customUrl || '');
+});
+
+// Re-register when custom URL changes
+chrome.storage.onChanged.addListener((changes) => {
+    if (changes.customUrl) {
+        updateCustomUrlRules(changes.customUrl.newValue || '');
+    }
+});

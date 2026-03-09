@@ -22,5 +22,24 @@
     "background": {
         "service_worker": "background.js"
     },
-    "permissions": ["contextMenus", "storage"]
+    "permissions": ["contextMenus", "storage", "scripting", "declarativeNetRequest"],
+    "host_permissions": ["<all_urls>"],
+    "declarative_net_request": {
+        "rule_resources": [
+            {
+                "id": "strip_frame_headers",
+                "enabled": true,
+                "path": "rules.json"
+            }
+        ]
+    },
+    "content_scripts": [
+        {
+            "matches": ["https://kagi.com/*"],
+            "js": ["block-focus.js"],
+            "run_at": "document_start",
+            "world": "MAIN",
+            "all_frames": true
+        }
+    ]
 }
