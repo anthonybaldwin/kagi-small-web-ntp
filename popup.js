@@ -39,7 +39,11 @@ const CATEGORY_GROUPS = [
 ];
 
 const container = document.getElementById('categoriesContainer');
+const tabTakeoverToggle = document.getElementById('tabTakeoverToggle');
+const blockFocusToggle = document.getElementById('blockFocusToggle');
+const blockFocusToggleRow = document.getElementById('blockFocusToggleRow');
 const toggle = document.getElementById('smallWebToggle');
+const smallWebToggleRow = document.getElementById('smallWebToggleRow');
 const urlSection = document.getElementById('urlSection');
 const customUrlInput = document.getElementById('customUrl');
 let selectedCategories = new Set();
@@ -135,17 +139,40 @@ function updateCheckboxes() {
 }
 
 function updateSections() {
-    const on = toggle.checked;
-    container.classList.toggle('visible', on);
-    urlSection.classList.toggle('visible', !on);
+    const takeoverOn = tabTakeoverToggle.checked;
+    const smallWebOn = toggle.checked;
+
+    // When tab takeover is off, disable everything below it
+    blockFocusToggleRow.classList.toggle('disabled', !takeoverOn);
+    smallWebToggleRow.classList.toggle('disabled', !takeoverOn);
+    container.classList.toggle('visible', takeoverOn && smallWebOn);
+    urlSection.classList.toggle('visible', takeoverOn && !smallWebOn);
 }
 
 function save() {
     chrome.storage.sync.set({ selectedCategories: [...selectedCategories] });
 }
 
+tabTakeoverToggle.addEventListener('change', () => {
+    chrome.storage.sync.set({ tabTakeoverEnabled: tabTakeoverToggle.checked });
+    updateSections();
+});
+
+blockFocusToggle.addEventListener('change', () => {
+    chrome.storage.sync.set({ blockFocusEnabled: blockFocusToggle.checked });
+});
+
 toggle.addEventListener('change', () => {
     chrome.storage.sync.set({ smallWebEnabled: toggle.checked });
+    // Auto-enable focus blocking the first time Small Web is turned on
+    if (toggle.checked) {
+        chrome.storage.sync.get(['blockFocusAutoEnabled'], (result) => {
+            if (!result.blockFocusAutoEnabled) {
+                chrome.storage.sync.set({ blockFocusEnabled: true, blockFocusAutoEnabled: true });
+                blockFocusToggle.checked = true;
+            }
+        });
+    }
     updateSections();
 });
 
@@ -159,9 +186,63 @@ customUrlInput.addEventListener('keydown', (e) => {
     }
 });
 
-chrome.storage.sync.get(['smallWebEnabled', 'selectedCategories', 'customUrl'], (result) => {
+chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'selectedCategories', 'customUrl'], (result) => {
+    tabTakeoverToggle.checked = result.tabTakeoverEnabled !== false;
+    blockFocusToggle.checked = result.blockFocusEnabled !== false;
     toggle.checked = result.smallWebEnabled || false;
     selectedCategories = new Set(result.selectedCategories || []);
     customUrlInput.value = result.customUrl ?? '';
     buildUI();
+
+    // Bookmark star: show if active tab is on Small Web
+    if (result.tabTakeoverEnabled !== false && result.smallWebEnabled) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (!tabs[0]) return;
+            // Get all frames in the tab to find the Small Web iframe URL
+            chrome.webNavigation.getAllFrames({ tabId: tabs[0].id }, (frames) => {
+                // Find the article iframe inside Small Web (not the smallweb page itself)
+                const articleFrame = frames && frames.find(f =>
+                    f.parentFrameId !== -1 &&
+                    !f.url.startsWith('chrome-extension://') &&
+                    !f.url.startsWith('https://kagi.com/smallweb') &&
+                    !f.url.startsWith('about:')
+                );
+                if (!articleFrame) return;
+
+                const frameUrl = articleFrame.url;
+                const star = document.getElementById('bookmarkStar');
+                let bookmarkId = null;
+
+                function updateStar() {
+                    chrome.bookmarks.search({ url: frameUrl }, (results) => {
+                        const exact = results.filter(b => b.url === frameUrl);
+                        bookmarkId = exact.length > 0 ? exact[0].id : null;
+                        star.src = bookmarkId ? 'icons/star-filled.svg' : 'icons/star-empty.svg';
+                        star.classList.toggle('active', !!bookmarkId);
+                        star.title = bookmarkId ? 'Remove bookmark' : 'Bookmark this page';
+                    });
+                }
+
+                star.addEventListener('click', async () => {
+                    if (bookmarkId) {
+                        chrome.bookmarks.remove(bookmarkId, () => updateStar());
+                    } else {
+                        // Get or create Small Web folder, then bookmark
+                        const tree = await chrome.bookmarks.getTree();
+                        const root = tree[0].children;
+                        const otherBookmarks = root.find(b => /other bookmarks/i.test(b.title));
+                        const bookmarksBar = root.find(b => /bookmarks bar/i.test(b.title));
+                        const parentId = (otherBookmarks || bookmarksBar || tree[0]).id;
+                        const children = await chrome.bookmarks.getChildren(parentId);
+                        const folder = children.find(b => b.title === 'Small Web' && !b.url)
+                            || await chrome.bookmarks.create({ parentId, title: 'Small Web' });
+                        chrome.bookmarks.create({ parentId: folder.id, title: tabs[0].title || frameUrl, url: frameUrl }, () => updateStar());
+                    }
+                });
+
+                star.style.display = 'block';
+                updateStar();
+            });
+        });
+    }
 });

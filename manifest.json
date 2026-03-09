@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Kagi Small Web NTP",
-    "version": "0.2",
-    "description": "New tab page that opens Kagi Small Web or Kagi",
+    "name": "Kagi Small Web",
+    "version": "0.3",
+    "description": "New tab page with Kagi, Small Web, or a custom URL. Configurable categories and focus control.",
     "icons": {
         "16": "icons/icon16.png",
         "48": "icons/icon48.png",
@@ -22,7 +22,7 @@
     "background": {
         "service_worker": "background.js"
     },
-    "permissions": ["contextMenus", "storage", "scripting", "declarativeNetRequest"],
+    "permissions": ["contextMenus", "storage", "scripting", "declarativeNetRequest", "bookmarks", "webNavigation"],
     "host_permissions": ["<all_urls>"],
     "declarative_net_request": {
         "rule_resources": [
@@ -33,13 +33,5 @@
             }
         ]
     },
-    "content_scripts": [
-        {
-            "matches": ["https://kagi.com/*"],
-            "js": ["block-focus.js"],
-            "run_at": "document_start",
-            "world": "MAIN",
-            "all_frames": true
-        }
-    ]
+    "content_scripts": []
 }

@@ -1,5 +1,11 @@
 // Check settings and load Kagi or Kagi Small Web in a full-viewport iframe
-chrome.storage.sync.get(['smallWebEnabled', 'selectedCategories', 'customUrl'], (result) => {
+chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'selectedCategories', 'customUrl'], (result) => {
+    if (result.tabTakeoverEnabled === false) {
+        chrome.runtime.sendMessage({ action: 'restoreDefaultNTP' });
+        return;
+    }
+    document.body.style.display = '';
+
     let url;
     if (result.smallWebEnabled) {
         const cats = result.selectedCategories || [];
@@ -13,7 +19,13 @@ chrome.storage.sync.get(['smallWebEnabled', 'selectedCategories', 'customUrl'], 
         url = result.customUrl || 'https://kagi.com';
     }
 
-    const iframe = document.createElement('iframe');
-    iframe.src = url;
-    document.body.appendChild(iframe);
+    if (result.blockFocusEnabled !== false) {
+        // Iframe mode: load in iframe with focus blocking
+        const iframe = document.createElement('iframe');
+        iframe.src = url;
+        document.body.appendChild(iframe);
+    } else {
+        // Direct mode: navigate straight to the URL
+        window.location.replace(url);
+    }
 });
