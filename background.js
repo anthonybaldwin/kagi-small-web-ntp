@@ -33,9 +33,13 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // Show/hide context menu based on whether the active tab is a Small Web page
 function updateContextMenuVisibility(tab) {
-    const isSmallWeb = tab?.url?.startsWith('https://kagi.com/smallweb') ||
-        tab?.url?.startsWith('chrome-extension://') ||
-        tab?.pendingUrl?.startsWith('chrome-extension://');
+    const url = tab?.url || '';
+    const pending = tab?.pendingUrl || '';
+    const isSmallWeb = url.startsWith('https://kagi.com/smallweb') ||
+        url.startsWith('chrome-extension://') ||
+        url === 'chrome://newtab/' ||
+        url === 'chrome://newtab' ||
+        pending.startsWith('chrome-extension://');
     chrome.contextMenus.update('add-to-smallweb', { visible: !!isSmallWeb });
 }
 
