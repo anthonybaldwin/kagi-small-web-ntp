@@ -25,15 +25,13 @@ chrome.runtime.onInstalled.addListener(() => {
 
 });
 
-// Create/update context menu when Small Web content is active on the NTP
-function shouldShowContextMenu(tabTakeoverEnabled, smallWebEnabled, customUrl) {
-    if (!tabTakeoverEnabled) return false;
-    if (smallWebEnabled) return true;
-    if (customUrl && customUrl.startsWith('https://kagi.com/smallweb')) return true;
-    return false;
-}
+// Context menu for bookmarking Small Web articles.
+// Show only when the active tab contains kagi.com/smallweb content.
+let contextMenuVisible = false;
 
-function ensureContextMenu(visible) {
+function setContextMenu(visible) {
+    if (visible === contextMenuVisible) return;
+    contextMenuVisible = visible;
     chrome.contextMenus.removeAll(() => {
         if (visible) {
             chrome.contextMenus.create({
@@ -45,21 +43,32 @@ function ensureContextMenu(visible) {
     });
 }
 
-function refreshContextMenu() {
-    chrome.storage.sync.get(['tabTakeoverEnabled', 'smallWebEnabled', 'customUrl'], (result) => {
-        ensureContextMenu(shouldShowContextMenu(
-            result.tabTakeoverEnabled !== false,
-            !!result.smallWebEnabled,
-            result.customUrl || ''
-        ));
-    });
+async function checkTabForSmallWeb(tabId) {
+    try {
+        const frames = await chrome.webNavigation.getAllFrames({ tabId });
+        const has = frames && frames.some(f => f.url.startsWith('https://kagi.com/smallweb'));
+        setContextMenu(has);
+    } catch (e) {
+        setContextMenu(false);
+    }
 }
 
-refreshContextMenu();
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+    checkTabForSmallWeb(tabId);
+});
 
-chrome.storage.onChanged.addListener((changes) => {
-    if (changes.tabTakeoverEnabled || changes.smallWebEnabled || changes.customUrl) {
-        refreshContextMenu();
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+    if (tab.active && info.status === 'complete') {
+        checkTabForSmallWeb(tabId);
+    }
+});
+
+// Catch iframe loads (e.g. kagi.com/smallweb loading inside NTP)
+chrome.webNavigation.onCompleted.addListener((details) => {
+    if (details.url.startsWith('https://kagi.com/smallweb')) {
+        chrome.tabs.get(details.tabId, (tab) => {
+            if (tab?.active) setContextMenu(true);
+        });
     }
 });
 

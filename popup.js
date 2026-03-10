@@ -194,14 +194,22 @@ chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEna
     customUrlInput.value = result.customUrl ?? '';
     buildUI();
 
-    // Bookmark star: show if active tab is on Small Web
-    if (result.tabTakeoverEnabled !== false && result.smallWebEnabled) {
+    // Bookmark star: show if active tab has Small Web content
+    const hasSmallWeb = result.smallWebEnabled ||
+        (result.customUrl && result.customUrl.startsWith('https://kagi.com/smallweb'));
+    if (hasSmallWeb) {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             if (!tabs[0]) return;
             // Get all frames in the tab to find the Small Web iframe URL
             chrome.webNavigation.getAllFrames({ tabId: tabs[0].id }, (frames) => {
+                if (!frames) return;
+                // Only proceed if the tab actually contains kagi.com/smallweb
+                const hasSmallWebFrame = frames.some(f =>
+                    f.url.startsWith('https://kagi.com/smallweb')
+                );
+                if (!hasSmallWebFrame) return;
                 // Find the article iframe inside Small Web (not the smallweb page itself)
-                const articleFrame = frames && frames.find(f =>
+                const articleFrame = frames.find(f =>
                     f.parentFrameId !== -1 &&
                     !f.url.startsWith('chrome-extension://') &&
                     !f.url.startsWith('https://kagi.com/smallweb') &&
