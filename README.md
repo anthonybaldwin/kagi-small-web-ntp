@@ -2,8 +2,11 @@
 
 A Chrome extension that replaces your new tab page with [Kagi Small Web](https://kagi.com/smallweb) or custom URL (defaults to [Kagi](https://kagi.com)).
 
-<a href="https://github.com/user-attachments/assets/d440abad-4833-44c1-95b4-a1ccd21dc4f9" target="_blank"><img width="25%" alt="image" src="https://github.com/user-attachments/assets/d440abad-4833-44c1-95b4-a1ccd21dc4f9" /></a>
-<a href="https://github.com/user-attachments/assets/9ec68823-9eb5-40fb-9abe-425cac36ffba" target="_blank"><img width="25%" alt="image" src="https://github.com/user-attachments/assets/9ec68823-9eb5-40fb-9abe-425cac36ffba" /></a>
+<img width="33%" alt="image" src="https://github.com/user-attachments/assets/b9085044-e774-46ed-8bd8-2c0c193ccf3a" /> <img width="30%" alt="image" src="https://github.com/user-attachments/assets/11e2c047-b043-4410-b7cc-2f71ffe3fb41" /> <img width="30%" alt="image" src="https://github.com/user-attachments/assets/76648723-b238-4c18-9cb5-9383d9c763e9" />
+
+#### Context menu
+<img width="322" height="37" alt="image" src="https://github.com/user-attachments/assets/92ab3ade-2e80-430e-a90b-5439ef59ed96" />
+
 
 ## Features
 
