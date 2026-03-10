@@ -1,6 +1,6 @@
 # Kagi Small Web NTP
 
-A Chrome extension that replaces your new tab page with [Kagi Small Web](https://kagi.com/smallweb) or custom URL (defaults to [Kagi](https://kagi.com)).
+A Chrome extension that replaces your new tab page with Kagi Small Web (`https://kagi.com/smallweb`) or custom URL (defaults to [Kagi](https://kagi.com)). More [here](https://github.com/kagisearch/smallweb?tab=readme-ov-file#kagi-small-web).
 
 <img width="33%" alt="image" src="https://github.com/user-attachments/assets/b9085044-e774-46ed-8bd8-2c0c193ccf3a" /> <img width="30%" alt="image" src="https://github.com/user-attachments/assets/11e2c047-b043-4410-b7cc-2f71ffe3fb41" /> <img width="30%" alt="image" src="https://github.com/user-attachments/assets/76648723-b238-4c18-9cb5-9383d9c763e9" />
 
