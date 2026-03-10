@@ -17,3 +17,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  THE SOFTWARE.
+
+---
+
+The following assets are NOT covered by the MIT license:
+
+- Kagi logos and Small Web badge (icons/) are property of Kagi Inc.
+  Source: https://kagi.com/assets
+
+- Plus Jakarta Sans font files (fonts/) are licensed under the
+  SIL Open Font License 1.1. See fonts/OFL.txt
