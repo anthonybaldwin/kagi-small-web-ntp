@@ -23,32 +23,44 @@ chrome.runtime.onInstalled.addListener(() => {
         }
     });
 
-    chrome.contextMenus.create({
-        id: 'add-to-smallweb',
-        title: 'Kagi Small Web — Bookmark this',
-        contexts: ['page', 'link'],
-        visible: false
-    });
 });
 
-// Show/hide context menu based on whether the active tab is a Small Web page
-function updateContextMenuVisibility(tab) {
-    const url = tab?.url || '';
-    const pending = tab?.pendingUrl || '';
-    const isSmallWeb = url.startsWith('https://kagi.com/smallweb') ||
-        url.startsWith('chrome-extension://') ||
-        url === 'chrome://newtab/' ||
-        url === 'chrome://newtab' ||
-        pending.startsWith('chrome-extension://');
-    chrome.contextMenus.update('add-to-smallweb', { visible: !!isSmallWeb });
+// Create/update context menu when Small Web content is active on the NTP
+function shouldShowContextMenu(tabTakeoverEnabled, smallWebEnabled, customUrl) {
+    if (!tabTakeoverEnabled) return false;
+    if (smallWebEnabled) return true;
+    if (customUrl && customUrl.startsWith('https://kagi.com/smallweb')) return true;
+    return false;
 }
 
-chrome.tabs.onActivated.addListener(({ tabId }) => {
-    chrome.tabs.get(tabId, updateContextMenuVisibility);
-});
+function ensureContextMenu(visible) {
+    chrome.contextMenus.removeAll(() => {
+        if (visible) {
+            chrome.contextMenus.create({
+                id: 'add-to-smallweb',
+                title: 'Kagi Small Web — Bookmark this',
+                contexts: ['page', 'frame', 'link']
+            });
+        }
+    });
+}
 
-chrome.tabs.onUpdated.addListener((_tabId, _info, tab) => {
-    if (tab.active) updateContextMenuVisibility(tab);
+function refreshContextMenu() {
+    chrome.storage.sync.get(['tabTakeoverEnabled', 'smallWebEnabled', 'customUrl'], (result) => {
+        ensureContextMenu(shouldShowContextMenu(
+            result.tabTakeoverEnabled !== false,
+            !!result.smallWebEnabled,
+            result.customUrl || ''
+        ));
+    });
+}
+
+refreshContextMenu();
+
+chrome.storage.onChanged.addListener((changes) => {
+    if (changes.tabTakeoverEnabled || changes.smallWebEnabled || changes.customUrl) {
+        refreshContextMenu();
+    }
 });
 
 const SMALLWEB_FOLDER_NAME = 'Small Web';
@@ -69,8 +81,24 @@ async function getOrCreateSmallWebFolder() {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId === 'add-to-smallweb') {
         const folder = await getOrCreateSmallWebFolder();
-        const url = info.linkUrl || info.frameUrl || info.pageUrl;
-        const title = info.linkUrl ? info.selectionText || url : tab.title || url;
+
+        // For links, use the link URL directly
+        if (info.linkUrl) {
+            const title = info.selectionText || info.linkUrl;
+            await chrome.bookmarks.create({ parentId: folder.id, title, url: info.linkUrl });
+            return;
+        }
+
+        // Find the article frame (same logic as popup bookmark star)
+        const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
+        const articleFrame = frames && frames.find(f =>
+            f.parentFrameId !== -1 &&
+            !f.url.startsWith('chrome-extension://') &&
+            !f.url.startsWith('https://kagi.com/smallweb') &&
+            !f.url.startsWith('about:')
+        );
+        const url = articleFrame?.url || info.frameUrl || info.pageUrl;
+        const title = tab.title || url;
         await chrome.bookmarks.create({ parentId: folder.id, title, url });
     }
 });
@@ -124,6 +152,7 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
         chrome.tabs.update(sender.tab.id, { url: 'chrome://new-tab-page' });
     }
 });
+
 
 // Dynamically register block-focus content scripts and header-stripping rules
 // for iframe mode. When focus blocking is off, none of this is needed since
