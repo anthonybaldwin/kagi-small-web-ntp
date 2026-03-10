@@ -36,3 +36,18 @@ A Chrome extension that replaces your new tab page with Kagi Small Web (`https:/
 Click the extension icon in the toolbar to open the settings popup. Toggle Small Web mode on, pick the categories you're interested in, and every new tab will take you somewhere new.
 
 You can also right-click anywhere and toggle **Use Kagi Small Web for New Tab** from the context menu.
+
+## Fonts
+
+This extension ships with [Plus Jakarta Sans](https://github.com/tokotype/PlusJakartaSans) (SIL Open Font License). Kagi uses [Lufga](https://ladd-design.com/family/lufga/), which requires a license.
+
+To swap fonts, drop `.ttf` files into `fonts/` and edit `fonts/font.config.json`:
+
+```json
+{
+    "family": "Lufga",
+    "prefix": "Lufga"
+}
+```
+
+Font files should be named `{prefix}-{Weight}.ttf` (e.g. `Lufga-Regular.ttf`, `Lufga-Bold.ttf`). Weights are detected automatically.

@@ -2,11 +2,8 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <script src="load-fonts.js"></script>
     <style>
-        @font-face { font-family: 'Lufga'; src: url('fonts/LufgaRegular.ttf') format('truetype'); font-weight: 400; font-style: normal; }
-        @font-face { font-family: 'Lufga'; src: url('fonts/LufgaMedium.ttf') format('truetype'); font-weight: 500; font-style: normal; }
-        @font-face { font-family: 'Lufga'; src: url('fonts/LufgaSemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; }
-        @font-face { font-family: 'Lufga'; src: url('fonts/LufgaBold.ttf') format('truetype'); font-weight: 700; font-style: normal; }
         :root {
             /* Kagi Moon Dark graphite scale */
             --bg-deep: #0f0f10;        /* ~graphite-1000 */
@@ -38,7 +35,7 @@
             width: 360px;
             background: var(--bg-deep);
             color: var(--text-primary);
-            font-family: 'Lufga', system-ui, sans-serif;
+            font-family: var(--font-family, system-ui), system-ui, sans-serif;
             font-size: 13px;
             -webkit-font-smoothing: antialiased;
         }
@@ -197,7 +194,7 @@
             border: 1px solid var(--border);
             border-radius: var(--radius-sm);
             color: var(--text-primary);
-            font-family: 'Lufga', system-ui, sans-serif;
+            font-family: var(--font-family, system-ui), system-ui, sans-serif;
             font-size: 12.5px;
             font-weight: 400;
             outline: none;
@@ -261,7 +258,7 @@
             background: none;
             border: 1px solid transparent;
             color: var(--text-secondary);
-            font-family: 'Lufga', system-ui, sans-serif;
+            font-family: var(--font-family, system-ui), system-ui, sans-serif;
             font-size: 10.5px;
             font-weight: 500;
             cursor: pointer;
