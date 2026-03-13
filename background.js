@@ -107,7 +107,21 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             !f.url.startsWith('about:')
         );
         const url = articleFrame?.url || info.frameUrl || info.pageUrl;
-        const title = tab.title || url;
+
+        // When in iframe mode, tab.title is "chrome://newtab" — grab the
+        // actual page title from inside the article frame instead.
+        let title = tab.title || url;
+        if (articleFrame) {
+            try {
+                const results = await chrome.scripting.executeScript({
+                    target: { tabId: tab.id, frameIds: [articleFrame.frameId] },
+                    func: () => document.title
+                });
+                if (results?.[0]?.result) {
+                    title = results[0].result;
+                }
+            } catch (e) { /* fall back to tab.title */ }
+        }
         await chrome.bookmarks.create({ parentId: folder.id, title, url });
     }
 });
