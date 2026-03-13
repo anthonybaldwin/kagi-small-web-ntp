@@ -244,7 +244,19 @@ chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEna
                         const children = await chrome.bookmarks.getChildren(parentId);
                         const folder = children.find(b => b.title === 'Small Web' && !b.url)
                             || await chrome.bookmarks.create({ parentId, title: 'Small Web' });
-                        chrome.bookmarks.create({ parentId: folder.id, title: tabs[0].title || frameUrl, url: frameUrl }, () => updateStar());
+                        // When in iframe mode, tabs[0].title is "chrome://newtab" —
+                        // grab the real title from inside the article frame.
+                        let title = frameUrl;
+                        try {
+                            const results = await chrome.scripting.executeScript({
+                                target: { tabId: tabs[0].id, frameIds: [articleFrame.frameId] },
+                                func: () => document.title
+                            });
+                            if (results?.[0]?.result) {
+                                title = results[0].result;
+                            }
+                        } catch (e) { /* fall back to URL */ }
+                        chrome.bookmarks.create({ parentId: folder.id, title, url: frameUrl }, () => updateStar());
                     }
                 });
 
