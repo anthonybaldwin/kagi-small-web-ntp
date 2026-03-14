@@ -76,6 +76,21 @@ async function getRandomFeedEntry(feedName) {
 // IFRAME PREPARATION
 // ═══════════════════════════════════════
 
+// YouTube embeds don't work from chrome-extension:// origins directly,
+// but our youtube.html wrapper page hosts the embed from our extension origin.
+function youTubeVideoId(url) {
+    try {
+        const u = new URL(url);
+        if (u.hostname.includes('youtube.com')) {
+            return u.searchParams.get('v') || u.pathname.match(/\/(?:shorts|embed)\/([^/?]+)/)?.[1];
+        }
+        if (u.hostname === 'youtu.be') {
+            return u.pathname.slice(1).split('/')[0];
+        }
+    } catch (e) {}
+    return null;
+}
+
 // One function for all header stripping. Uses tabId as rule ID
 // so each tab gets its own rule — no collisions, no tracking Maps.
 async function prepareIframe(url, tabId) {
@@ -320,9 +335,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             try {
                 const entry = await getRandomFeedEntry(msg.feed);
                 if (!entry) { sendResponse({ url: null }); return; }
-                await prepareIframe(entry.url, sender.tab.id);
                 await setArticleInfo(sender.tab.id, entry.url, entry.title, 'feed/' + msg.feed);
-                sendResponse({ url: entry.url });
+                const ytId = youTubeVideoId(entry.url);
+                if (!ytId) {
+                    await prepareIframe(entry.url, sender.tab.id);
+                }
+                sendResponse({ url: entry.url, title: entry.title, youtube: !!ytId, videoId: ytId });
             } catch (e) {
                 sendResponse({ url: null });
             }

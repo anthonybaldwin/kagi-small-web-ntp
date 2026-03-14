@@ -96,6 +96,49 @@ describe('parseAtomEntries', () => {
 });
 
 // ═══════════════════════════════════════
+// YOUTUBE EMBED CONVERSION TESTS
+// ═══════════════════════════════════════
+
+function youTubeVideoId(url) {
+    try {
+        const u = new URL(url);
+        if (u.hostname.includes('youtube.com')) {
+            return u.searchParams.get('v') || u.pathname.match(/\/(?:shorts|embed)\/([^/?]+)/)?.[1];
+        }
+        if (u.hostname === 'youtu.be') {
+            return u.pathname.slice(1).split('/')[0];
+        }
+    } catch (e) {}
+    return null;
+}
+
+describe('youTubeVideoId', () => {
+    test('extracts ID from youtube.com/watch?v=ID', () => {
+        expect(youTubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    });
+
+    test('extracts ID with extra params', () => {
+        expect(youTubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42')).toBe('dQw4w9WgXcQ');
+    });
+
+    test('extracts ID from youtu.be/ID', () => {
+        expect(youTubeVideoId('https://youtu.be/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    });
+
+    test('extracts ID from youtube.com/shorts/ID', () => {
+        expect(youTubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    });
+
+    test('returns null for non-YouTube URLs', () => {
+        expect(youTubeVideoId('https://github.com/user/repo')).toBeNull();
+    });
+
+    test('returns null/undefined for YouTube channel pages', () => {
+        expect(youTubeVideoId('https://www.youtube.com/@channel')).toBeFalsy();
+    });
+});
+
+// ═══════════════════════════════════════
 // URL PICKING LOGIC TESTS
 // ═══════════════════════════════════════
 
