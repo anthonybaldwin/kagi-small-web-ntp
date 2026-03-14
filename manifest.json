@@ -22,7 +22,7 @@
     "background": {
         "service_worker": "background.js"
     },
-    "permissions": ["contextMenus", "storage", "scripting", "declarativeNetRequest", "bookmarks", "webNavigation"],
+    "permissions": ["contextMenus", "storage", "scripting", "declarativeNetRequest", "bookmarks", "webNavigation", "readingList"],
     "host_permissions": ["<all_urls>"],
     "declarative_net_request": {
         "rule_resources": [
@@ -32,6 +32,5 @@
                 "path": "rules.json"
             }
         ]
-    },
-    "content_scripts": []
+    }
 }

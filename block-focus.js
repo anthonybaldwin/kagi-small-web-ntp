@@ -33,4 +33,25 @@
         prototypes.forEach((p, i) => { p.focus = originals[i]; });
         observer.disconnect();
     }, BLOCK_MS);
+
+    // When inside an iframe, intercept navigation to break out of the sandbox.
+    // Link clicks navigate the top-level page (restoring full cookies/auth).
+    // Escape key does the same for the current page.
+    if (window.top !== window) {
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a[href]');
+            if (!link) return;
+            if (link.target === '_blank') return; // let popups open normally
+            if (!link.href.startsWith('http')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            window.top.postMessage({ type: 'kagi-navigate', url: link.href }, '*');
+        }, true);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                window.top.postMessage({ type: 'kagi-navigate', url: window.location.href }, '*');
+            }
+        });
+    }
 })();

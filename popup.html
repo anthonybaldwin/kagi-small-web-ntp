@@ -53,7 +53,7 @@
         .header {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
             padding: 12px 16px;
             background: var(--bg-base);
             border-bottom: 1px solid var(--border);
@@ -362,12 +362,102 @@
             opacity: 0.8;
         }
 
+        /* ── Appreciate Heart ── */
+        .appreciate-btn {
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+            opacity: 0.45;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            display: none;
+            flex-shrink: 0;
+        }
+        .appreciate-btn:hover {
+            opacity: 0.85;
+            transform: scale(1.15);
+        }
+        .appreciate-btn.active {
+            opacity: 0.8;
+        }
+
+        /* ── Reading List Book ── */
+        .reading-list-btn {
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+            opacity: 0.45;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            display: none;
+            flex-shrink: 0;
+        }
+        .reading-list-btn:hover {
+            opacity: 0.85;
+            transform: scale(1.15);
+        }
+        .reading-list-btn.active {
+            opacity: 0.8;
+        }
+
+        /* ── Tab Bar ── */
+        .tab-bar {
+            display: none;
+            background: var(--bg-base);
+            padding: 0 16px;
+            position: relative;
+        }
+        .tab-bar.visible {
+            display: flex;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 9px 0 7px;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            font-family: var(--font-family, system-ui), system-ui, sans-serif;
+            font-size: 10.5px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            transition: color var(--transition-fast), border-color var(--transition-med),
+                        text-shadow var(--transition-med);
+        }
+        .tab-btn:hover {
+            color: var(--text-secondary);
+        }
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            text-shadow: 0 0 12px rgba(140, 207, 205, 0.3);
+        }
+
+        /* ── Feeds ── */
+        .feeds {
+            background: var(--bg-base);
+            padding: 2px 0 8px;
+            display: none;
+        }
+        .feeds.visible {
+            display: block;
+        }
+
+        /* ── Header Actions (star/heart/book group) ── */
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
         /* ── Header Badges ── */
         .header-badges {
             display: flex;
             align-items: center;
             gap: 6px;
             margin-left: auto;
+            flex-shrink: 0;
         }
         .header-badges a {
             display: flex;
@@ -379,7 +469,7 @@
             opacity: 1;
         }
         .header-badges img {
-            height: 24px;
+            height: 20px;
             width: auto;
         }
     </style>
@@ -390,7 +480,11 @@
             <img class="header-icon" src="icons/icon.svg" alt="Kagi Small Web">
         </a>
         <h1>Kagi <span>Small Web</span></h1>
-        <img id="bookmarkStar" class="bookmark-star" src="icons/star-empty.svg" alt="Bookmark" title="Bookmark this page">
+        <div class="header-actions">
+            <img id="appreciateBtn" class="appreciate-btn" src="icons/heart-empty.svg" alt="Appreciate" title="Appreciate this page">
+            <img id="bookmarkStar" class="bookmark-star" src="icons/star-empty.svg" alt="Bookmark" title="Bookmark this page">
+            <img id="readingListBtn" class="reading-list-btn" src="icons/book-empty.svg" alt="Reading List" title="Add to Reading List">
+        </div>
         <div class="header-badges">
             <a href="https://kagi.com" title="Use Kagi" target="_blank" rel="noopener noreferrer">
                 <img src="https://kagi.com/smallweb/static/UseKagiV4C.gif" alt="Use Kagi">
@@ -416,7 +510,7 @@
         <div class="toggle-row" id="blockFocusToggleRow">
             <div>
                 <div class="toggle-label">Keep focus in address bar</div>
-                <div class="toggle-desc">Uses an iframe to prevent omnibox focus theft</div>
+                <div class="toggle-desc">Loads content in an iframe on the New Tab page</div>
             </div>
             <label class="toggle">
                 <input type="checkbox" id="blockFocusToggle">
@@ -443,8 +537,13 @@
 
     <div class="section-break"></div>
 
-    <div id="categoriesContainer" class="categories"></div>
+    <div id="tabBar" class="tab-bar">
+        <button class="tab-btn active" data-tab="categories">Categories</button>
+        <button class="tab-btn" data-tab="feeds">Feeds</button>
+    </div>
 
+    <div id="categoriesContainer" class="categories"></div>
+    <div id="feedsContainer" class="feeds"></div>
 
     <script src="popup.js"></script>
 </body>

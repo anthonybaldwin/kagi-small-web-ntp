@@ -4,125 +4,403 @@ const ALL_CATEGORIES = [
     'society', 'life', 'food', 'travel', 'politics', 'economy'
 ];
 
-chrome.runtime.onInstalled.addListener(() => {
-    chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'selectedCategories', 'customUrl'], (result) => {
-        if (result.tabTakeoverEnabled === undefined) {
-            chrome.storage.sync.set({ tabTakeoverEnabled: true });
-        }
-        if (result.blockFocusEnabled === undefined) {
-            chrome.storage.sync.set({ blockFocusEnabled: true });
-        }
-        if (result.smallWebEnabled === undefined) {
-            chrome.storage.sync.set({ smallWebEnabled: false });
-        }
-        if (result.selectedCategories === undefined) {
-            chrome.storage.sync.set({ selectedCategories: ALL_CATEGORIES });
-        }
-        if (result.customUrl === undefined) {
-            chrome.storage.sync.set({ customUrl: '' });
-        }
-    });
+const ALL_FEEDS = ['blogs', 'appreciated', 'youtube', 'github', 'comics'];
 
-});
+const FEED_ENDPOINTS = {
+    blogs:       'https://kagi.com/api/v1/smallweb/feed/?nso',
+    youtube:     'https://kagi.com/api/v1/smallweb/feed/?yt',
+    github:      'https://kagi.com/api/v1/smallweb/feed/?gh',
+    comics:      'https://kagi.com/api/v1/smallweb/feed/?comic',
+    appreciated: 'https://kagi.com/smallweb/appreciated'
+};
 
-// Context menu for bookmarking Small Web articles.
-// Show only when the active tab contains kagi.com/smallweb content.
-let contextMenuVisible = false;
+const SMALLWEB_BASE = 'https://kagi.com/smallweb';
 
-function setContextMenu(visible) {
-    if (visible === contextMenuVisible) return;
-    contextMenuVisible = visible;
-    chrome.contextMenus.removeAll(() => {
-        if (visible) {
-            chrome.contextMenus.create({
-                id: 'add-to-smallweb',
-                title: 'Kagi Small Web — Bookmark this',
-                contexts: ['page', 'frame', 'link']
+// ═══════════════════════════════════════
+// FEED CACHING
+// ═══════════════════════════════════════
+
+function parseAtomEntries(xml) {
+    const entries = [];
+    let pos = 0;
+    while (true) {
+        const start = xml.indexOf('<entry', pos);
+        if (start === -1) break;
+        const end = xml.indexOf('</entry>', start);
+        if (end === -1) break;
+        const block = xml.slice(start, end);
+        pos = end + 8;
+
+        const href = block.match(/href="(https:\/\/[^"]+)"/);
+        const titleTag = block.match(/<title[^>]*>([^<]+)<\/title>/);
+        if (href) {
+            entries.push({
+                title: (titleTag?.[1] || 'Untitled')
+                    .replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_, c) => String.fromCharCode(+c)),
+                url: href[1]
             });
         }
+    }
+    return entries;
+}
+
+async function getRandomFeedEntry(feedName) {
+    const CACHE_KEY = 'feedData';
+    const THREE_HOURS = 3 * 60 * 60 * 1000;
+
+    const stored = await chrome.storage.local.get(CACHE_KEY);
+    const all = stored[CACHE_KEY] || {};
+    const slot = all[feedName];
+
+    let entries;
+    if (slot && slot.entries.length > 0 && (Date.now() - slot.fetchedAt) < THREE_HOURS) {
+        entries = slot.entries;
+    } else {
+        try {
+            const res = await fetch(FEED_ENDPOINTS[feedName]);
+            if (!res.ok) throw new Error(res.status);
+            entries = parseAtomEntries(await res.text());
+            all[feedName] = { entries, fetchedAt: Date.now() };
+            await chrome.storage.local.set({ [CACHE_KEY]: all });
+        } catch (e) {
+            entries = slot?.entries || [];
+        }
+    }
+
+    if (entries.length === 0) return null;
+    return entries[Math.floor(Math.random() * entries.length)];
+}
+
+// ═══════════════════════════════════════
+// IFRAME PREPARATION
+// ═══════════════════════════════════════
+
+// One function for all header stripping. Uses tabId as rule ID
+// so each tab gets its own rule — no collisions, no tracking Maps.
+async function prepareIframe(url, tabId) {
+    const urlObj = new URL(url);
+    if (urlObj.hostname === 'kagi.com') return; // static rules.json handles kagi.com
+
+    const scriptId = 'block-focus-' + tabId;
+    await chrome.scripting.unregisterContentScripts({ ids: [scriptId] }).catch(() => {});
+
+    await chrome.declarativeNetRequest.updateSessionRules({
+        removeRuleIds: [tabId],
+        addRules: [{
+            id: tabId,
+            priority: 1,
+            action: {
+                type: 'modifyHeaders',
+                responseHeaders: [
+                    { header: 'X-Frame-Options', operation: 'remove' },
+                    { header: 'Content-Security-Policy', operation: 'set', value: "object-src 'none'; base-uri 'self';" }
+                ]
+            },
+            condition: {
+                urlFilter: '||' + urlObj.hostname,
+                resourceTypes: ['sub_frame'],
+                tabIds: [tabId]
+            }
+        }]
+    });
+
+    await chrome.scripting.registerContentScripts([{
+        id: scriptId,
+        matches: [urlObj.origin + '/*'],
+        js: ['block-focus.js'],
+        runAt: 'document_start',
+        world: 'MAIN',
+        allFrames: true
+    }]);
+}
+
+function cleanupTab(tabId) {
+    chrome.storage.session.remove('articleUrl_' + tabId);
+    chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [tabId] });
+    chrome.scripting.unregisterContentScripts({ ids: ['block-focus-' + tabId] }).catch(() => {});
+    setContextMenu(false);
+}
+
+// ═══════════════════════════════════════
+// ARTICLE INFO (session storage — survives SW restarts)
+// ═══════════════════════════════════════
+
+async function setArticleInfo(tabId, url, title, source) {
+    await chrome.storage.session.set({ ['articleUrl_' + tabId]: { url, title, source } });
+    // Show context menu if this is the active tab
+    try {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (activeTab?.id === tabId) await setContextMenu(true);
+    } catch (e) {}
+}
+
+async function getArticleInfo(tabId) {
+    const stored = await chrome.storage.session.get('articleUrl_' + tabId);
+    return stored['articleUrl_' + tabId] || null;
+}
+
+// ═══════════════════════════════════════
+// CONTEXT MENU
+// ═══════════════════════════════════════
+
+function setContextMenu(visible) {
+    return new Promise(resolve => {
+        chrome.contextMenus.removeAll(() => {
+            if (visible) {
+                chrome.contextMenus.create({ id: 'bookmark-article', title: 'Bookmark this', contexts: ['page', 'frame', 'link'] });
+                chrome.contextMenus.create({ id: 'add-to-reading-list', title: 'Add to Reading List', contexts: ['page', 'frame', 'link'] });
+                chrome.contextMenus.create({ id: 'appreciate-post', title: 'Appreciate this', contexts: ['page', 'frame', 'link'] });
+            }
+            resolve();
+        });
     });
 }
 
-async function checkTabForSmallWeb(tabId) {
-    try {
-        const frames = await chrome.webNavigation.getAllFrames({ tabId });
-        const has = frames && frames.some(f => f.url.startsWith('https://kagi.com/smallweb'));
-        setContextMenu(has);
-    } catch (e) {
-        setContextMenu(false);
-    }
+// Show/hide context menu based on whether this tab has article info
+async function updateContextMenuForTab(tabId) {
+    const info = await getArticleInfo(tabId);
+    await setContextMenu(!!info);
 }
 
-chrome.tabs.onActivated.addListener(({ tabId }) => {
-    checkTabForSmallWeb(tabId);
-});
+// ═══════════════════════════════════════
+// BOOKMARKS & APPRECIATE
+// ═══════════════════════════════════════
 
-chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
-    if (tab.active && info.status === 'complete') {
-        checkTabForSmallWeb(tabId);
-    }
-});
+async function getOrCreateFolder(parentId, name) {
+    const children = await chrome.bookmarks.getChildren(parentId);
+    return children.find(b => b.title === name && !b.url)
+        || await chrome.bookmarks.create({ parentId, title: name });
+}
 
-// Catch iframe loads (e.g. kagi.com/smallweb loading inside NTP)
-chrome.webNavigation.onCompleted.addListener((details) => {
-    if (details.url.startsWith('https://kagi.com/smallweb')) {
-        chrome.tabs.get(details.tabId, (tab) => {
-            if (tab?.active) setContextMenu(true);
-        });
-    }
-});
-
-const SMALLWEB_FOLDER_NAME = 'Small Web';
-
-async function getOrCreateSmallWebFolder() {
-    // Find "Other Bookmarks" by getting the root tree
+async function getBookmarkFolder(source) {
     const tree = await chrome.bookmarks.getTree();
     const root = tree[0].children;
+    // Look for existing Small Web folder in preferred order before creating one
     const otherBookmarks = root.find(b => /other bookmarks/i.test(b.title));
     const bookmarksBar = root.find(b => /bookmarks bar/i.test(b.title));
-    const parentId = (otherBookmarks || bookmarksBar || tree[0]).id;
-    const children = await chrome.bookmarks.getChildren(parentId);
-    const existing = children.find(b => b.title === SMALLWEB_FOLDER_NAME && !b.url);
-    if (existing) return existing;
-    return chrome.bookmarks.create({ parentId, title: SMALLWEB_FOLDER_NAME });
+    const searchOrder = [bookmarksBar, otherBookmarks, root[0]].filter(Boolean);
+
+    let swFolder = null;
+    for (const parent of searchOrder) {
+        const children = await chrome.bookmarks.getChildren(parent.id);
+        const found = children.find(b => b.title === 'Small Web' && !b.url);
+        if (found) { swFolder = found; break; }
+    }
+    if (!swFolder) {
+        const defaultParent = searchOrder[0];
+        swFolder = await chrome.bookmarks.create({ parentId: defaultParent.id, title: 'Small Web' });
+    }
+
+    if (!source) return swFolder;
+
+    // source is "cat/ai" or "feed/github" → create subfolders
+    const parts = source.split('/');
+    let folder = swFolder;
+    for (const part of parts) {
+        folder = await getOrCreateFolder(folder.id, part);
+    }
+    return folder;
 }
 
+async function appreciatePost(url) {
+    try {
+        const formData = new FormData();
+        formData.append('url', url);
+        formData.append('emoji', '\uD83D\uDC4D');
+        const response = await fetch(SMALLWEB_BASE + '/favorite', {
+            method: 'POST', body: formData, credentials: 'include'
+        });
+        return response.ok;
+    } catch (e) {
+        return false;
+    }
+}
+
+// ═══════════════════════════════════════
+// EVENT LISTENERS
+// ═══════════════════════════════════════
+
+// Tab activated: update context menu from session storage
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+    updateContextMenuForTab(tabId);
+});
+
+// Tab closed: clean up everything for that tab
+chrome.tabs.onRemoved.addListener((tabId) => {
+    cleanupTab(tabId);
+});
+
+// Top-level navigation away from our NTP: clean up
+chrome.webNavigation.onCommitted.addListener((details) => {
+    if (details.frameId === 0 && !details.url.startsWith('chrome-extension://')) {
+        cleanupTab(details.tabId);
+    }
+});
+
+// Category pages: discover the article inside kagi.com/smallweb
+chrome.webNavigation.onCompleted.addListener(async (details) => {
+    if (!details.url.startsWith('https://kagi.com/smallweb')) return;
+
+    const tab = await chrome.tabs.get(details.tabId).catch(() => null);
+    if (!tab?.active) return;
+
+    // Only cache once per tab
+    if (await getArticleInfo(details.tabId)) return;
+
+    const frames = await chrome.webNavigation.getAllFrames({ tabId: details.tabId });
+    const articleFrame = frames?.find(f =>
+        f.parentFrameId !== -1 &&
+        !f.url.startsWith('chrome-extension://') &&
+        !f.url.startsWith('https://kagi.com/smallweb') &&
+        !f.url.startsWith('about:')
+    );
+    if (!articleFrame) return;
+
+    let title = articleFrame.url;
+    try {
+        const results = await chrome.scripting.executeScript({
+            target: { tabId: details.tabId, frameIds: [articleFrame.frameId] },
+            func: () => document.title
+        });
+        if (results?.[0]?.result) title = results[0].result;
+    } catch (e) {}
+
+    // Extract category from the kagi.com/smallweb URL (e.g. ?cat=ai)
+    try {
+        const cat = new URL(details.url).searchParams.get('cat');
+        await setArticleInfo(details.tabId, articleFrame.url, title, cat ? 'cat/' + cat : null);
+    } catch (e) {
+        await setArticleInfo(details.tabId, articleFrame.url, title);
+    }
+});
+
+// ═══════════════════════════════════════
+// CONTEXT MENU CLICK HANDLERS
+// ═══════════════════════════════════════
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-    if (info.menuItemId === 'add-to-smallweb') {
-        const folder = await getOrCreateSmallWebFolder();
+    const article = await getArticleInfo(tab.id);
 
-        // For links, use the link URL directly
+    if (info.menuItemId === 'bookmark-article') {
+        const folder = await getBookmarkFolder(article?.source);
         if (info.linkUrl) {
-            const title = info.selectionText || info.linkUrl;
-            await chrome.bookmarks.create({ parentId: folder.id, title, url: info.linkUrl });
-            return;
+            await chrome.bookmarks.create({ parentId: folder.id, title: info.selectionText || info.linkUrl, url: info.linkUrl });
+        } else {
+            const url = article?.url || info.frameUrl || info.pageUrl;
+            const title = article?.title || url;
+            await chrome.bookmarks.create({ parentId: folder.id, title, url });
         }
+    }
 
-        // Find the article frame (same logic as popup bookmark star)
-        const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
-        const articleFrame = frames && frames.find(f =>
-            f.parentFrameId !== -1 &&
-            !f.url.startsWith('chrome-extension://') &&
-            !f.url.startsWith('https://kagi.com/smallweb') &&
-            !f.url.startsWith('about:')
-        );
-        const url = articleFrame?.url || info.frameUrl || info.pageUrl;
+    if (info.menuItemId === 'add-to-reading-list') {
+        const url = info.linkUrl || article?.url || info.frameUrl || info.pageUrl;
+        const title = info.selectionText || article?.title || url;
+        try { await chrome.readingList.addEntry({ url, title, hasBeenRead: false }); } catch (e) {}
+    }
 
-        // When in iframe mode, tab.title is "chrome://newtab" — grab the
-        // actual page title from inside the article frame instead.
-        let title = tab.title || url;
-        if (articleFrame) {
+    if (info.menuItemId === 'appreciate-post') {
+        const url = info.linkUrl || article?.url || info.frameUrl || info.pageUrl;
+        if (url) await appreciatePost(url);
+    }
+});
+
+// ═══════════════════════════════════════
+// MESSAGE HANDLER
+// ═══════════════════════════════════════
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.action === 'restoreDefaultNTP' && sender.tab) {
+        chrome.tabs.update(sender.tab.id, { url: 'chrome://new-tab-page' });
+    }
+
+    // Combined: fetch feed entry + prepare iframe + cache article info
+    if (msg.action === 'loadFeedContent' && sender.tab) {
+        (async () => {
             try {
-                const results = await chrome.scripting.executeScript({
-                    target: { tabId: tab.id, frameIds: [articleFrame.frameId] },
-                    func: () => document.title
-                });
-                if (results?.[0]?.result) {
-                    title = results[0].result;
-                }
-            } catch (e) { /* fall back to tab.title */ }
+                const entry = await getRandomFeedEntry(msg.feed);
+                if (!entry) { sendResponse({ url: null }); return; }
+                await prepareIframe(entry.url, sender.tab.id);
+                await setArticleInfo(sender.tab.id, entry.url, entry.title, 'feed/' + msg.feed);
+                sendResponse({ url: entry.url });
+            } catch (e) {
+                sendResponse({ url: null });
+            }
+        })();
+        return true;
+    }
+
+    // Prepare iframe for custom URL
+    if (msg.action === 'prepareIframe' && sender.tab) {
+        prepareIframe(msg.url, sender.tab.id)
+            .then(() => sendResponse({ ready: true }))
+            .catch(() => sendResponse({ ready: false }));
+        return true;
+    }
+
+    // Popup reads article info
+    if (msg.action === 'getArticleInfo') {
+        getArticleInfo(msg.tabId)
+            .then(info => sendResponse(info));
+        return true;
+    }
+
+    if (msg.action === 'bookmarkArticle') {
+        (async () => {
+            const folder = await getBookmarkFolder(msg.source);
+            await chrome.bookmarks.create({ parentId: folder.id, title: msg.title, url: msg.url });
+            sendResponse({ success: true });
+        })();
+        return true;
+    }
+
+    if (msg.action === 'appreciatePost') {
+        appreciatePost(msg.url).then(ok => sendResponse({ success: ok }));
+        return true;
+    }
+});
+
+// ═══════════════════════════════════════
+// INIT & ICON
+// ═══════════════════════════════════════
+
+chrome.runtime.onInstalled.addListener(() => {
+    chrome.storage.sync.get(
+        ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl'],
+        (result) => {
+            const defaults = {};
+            if (result.tabTakeoverEnabled === undefined) defaults.tabTakeoverEnabled = true;
+            if (result.blockFocusEnabled === undefined) defaults.blockFocusEnabled = true;
+            if (result.smallWebEnabled === undefined) defaults.smallWebEnabled = false;
+            if (result.selectedCategories === undefined) defaults.selectedCategories = ALL_CATEGORIES;
+            if (result.selectedFeeds === undefined) defaults.selectedFeeds = ALL_FEEDS;
+            if (result.customUrl === undefined) defaults.customUrl = '';
+            if (Object.keys(defaults).length > 0) chrome.storage.sync.set(defaults);
         }
-        await chrome.bookmarks.create({ parentId: folder.id, title, url });
+    );
+    Object.keys(FEED_ENDPOINTS).forEach(name => getRandomFeedEntry(name));
+});
+
+chrome.runtime.onStartup.addListener(() => {
+    chrome.storage.sync.get(['selectedFeeds'], (result) => {
+        if (result.selectedFeeds === undefined) {
+            chrome.storage.sync.set({ selectedFeeds: ALL_FEEDS });
+        }
+    });
+    Object.keys(FEED_ENDPOINTS).forEach(name => getRandomFeedEntry(name));
+});
+
+// Focus-blocking script for kagi.com (static rules.json handles headers)
+chrome.storage.sync.get(['blockFocusEnabled'], (result) => {
+    if (result.blockFocusEnabled !== false) {
+        chrome.scripting.registerContentScripts([{
+            id: 'block-focus-kagi',
+            matches: ['https://kagi.com/*'],
+            js: ['block-focus.js'],
+            runAt: 'document_start',
+            world: 'MAIN',
+            allFrames: true
+        }]).catch(() => {}); // already registered
     }
 });
 
@@ -130,9 +408,22 @@ chrome.storage.onChanged.addListener((changes) => {
     if (changes.tabTakeoverEnabled) {
         updateIcon(changes.tabTakeoverEnabled.newValue !== false);
     }
+    if (changes.blockFocusEnabled) {
+        if (changes.blockFocusEnabled.newValue !== false) {
+            chrome.scripting.registerContentScripts([{
+                id: 'block-focus-kagi',
+                matches: ['https://kagi.com/*'],
+                js: ['block-focus.js'],
+                runAt: 'document_start',
+                world: 'MAIN',
+                allFrames: true
+            }]).catch(() => {});
+        } else {
+            chrome.scripting.unregisterContentScripts({ ids: ['block-focus-kagi'] }).catch(() => {});
+        }
+    }
 });
 
-// Gray out toolbar icon when Small Web is disabled
 async function updateIcon(enabled) {
     if (enabled) {
         chrome.action.setIcon({
@@ -140,11 +431,10 @@ async function updateIcon(enabled) {
         });
         return;
     }
-
     const sizes = [16, 48, 128];
     const imageData = {};
     for (const size of sizes) {
-        const resp = await fetch(`icons/icon${size}.png`);
+        const resp = await fetch('icons/icon' + size + '.png');
         const blob = await resp.blob();
         const bitmap = await createImageBitmap(blob);
         const canvas = new OffscreenCanvas(size, size);
@@ -154,9 +444,7 @@ async function updateIcon(enabled) {
         const px = data.data;
         for (let i = 0; i < px.length; i += 4) {
             const gray = Math.round(0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]);
-            px[i] = gray;
-            px[i + 1] = gray;
-            px[i + 2] = gray;
+            px[i] = gray; px[i + 1] = gray; px[i + 2] = gray;
             px[i + 3] = Math.round(px[i + 3] * 0.5);
         }
         imageData[size] = data;
@@ -164,97 +452,6 @@ async function updateIcon(enabled) {
     chrome.action.setIcon({ imageData });
 }
 
-// Set initial icon state on startup
 chrome.storage.sync.get(['tabTakeoverEnabled'], (result) => {
     updateIcon(result.tabTakeoverEnabled !== false);
-});
-
-// Handle redirect to default NTP when tab takeover is disabled
-chrome.runtime.onMessage.addListener((msg, sender) => {
-    if (msg.action === 'restoreDefaultNTP' && sender.tab) {
-        chrome.tabs.update(sender.tab.id, { url: 'chrome://new-tab-page' });
-    }
-});
-
-
-// Dynamically register block-focus content scripts and header-stripping rules
-// for iframe mode. When focus blocking is off, none of this is needed since
-// we navigate directly to the URL instead of using an iframe.
-const KAGI_SCRIPT_ID = 'block-focus-kagi';
-const CUSTOM_URL_SCRIPT_ID = 'block-focus-custom-url';
-const CUSTOM_URL_RULE_ID = 2;
-
-async function updateFocusBlockingRules(blockFocusEnabled, customUrl) {
-    // Remove dynamic rules and scripts first
-    await chrome.declarativeNetRequest.updateDynamicRules({
-        removeRuleIds: [CUSTOM_URL_RULE_ID]
-    });
-    // Unregister individually to avoid errors if one doesn't exist
-    for (const id of [KAGI_SCRIPT_ID, CUSTOM_URL_SCRIPT_ID]) {
-        try { await chrome.scripting.unregisterContentScripts({ ids: [id] }); } catch (e) {}
-    }
-
-    // Kagi.com header stripping is handled by static rules.json (always active
-    // for sub_frame requests — harmless when not using iframe mode).
-    // We only dynamically manage content scripts and custom URL header rules.
-
-    if (!blockFocusEnabled) return;
-
-    // Register focus-blocking content script for kagi.com
-    await chrome.scripting.registerContentScripts([{
-        id: KAGI_SCRIPT_ID,
-        matches: ['https://kagi.com/*'],
-        js: ['block-focus.js'],
-        runAt: 'document_start',
-        world: 'MAIN',
-        allFrames: true
-    }]);
-
-    // Register custom URL rules if set and not kagi.com
-    if (!customUrl) return;
-    try {
-        const url = new URL(customUrl);
-        if (url.hostname === 'kagi.com') return;
-
-        await chrome.declarativeNetRequest.updateDynamicRules({
-            addRules: [{
-                id: CUSTOM_URL_RULE_ID,
-                priority: 1,
-                action: {
-                    type: 'modifyHeaders',
-                    responseHeaders: [
-                        { header: 'X-Frame-Options', operation: 'remove' },
-                        { header: 'Content-Security-Policy', operation: 'remove' }
-                    ]
-                },
-                condition: {
-                    urlFilter: '||' + url.hostname,
-                    resourceTypes: ['sub_frame']
-                }
-            }]
-        });
-
-        await chrome.scripting.registerContentScripts([{
-            id: CUSTOM_URL_SCRIPT_ID,
-            matches: [url.origin + '/*'],
-            js: ['block-focus.js'],
-            runAt: 'document_start',
-            world: 'MAIN',
-            allFrames: true
-        }]);
-    } catch (e) {}
-}
-
-// Register on startup
-chrome.storage.sync.get(['blockFocusEnabled', 'customUrl'], (result) => {
-    updateFocusBlockingRules(result.blockFocusEnabled !== false, result.customUrl || '');
-});
-
-// Re-register when settings change
-chrome.storage.onChanged.addListener((changes) => {
-    if (changes.blockFocusEnabled || changes.customUrl) {
-        chrome.storage.sync.get(['blockFocusEnabled', 'customUrl'], (result) => {
-            updateFocusBlockingRules(result.blockFocusEnabled !== false, result.customUrl || '');
-        });
-    }
 });

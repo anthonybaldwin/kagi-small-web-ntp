@@ -6,7 +6,7 @@
             "type": "modifyHeaders",
             "responseHeaders": [
                 { "header": "X-Frame-Options", "operation": "remove" },
-                { "header": "Content-Security-Policy", "operation": "remove" }
+                { "header": "Content-Security-Policy", "operation": "set", "value": "object-src 'none'; base-uri 'self';" }
             ]
         },
         "condition": {
