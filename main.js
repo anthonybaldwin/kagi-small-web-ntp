@@ -1,4 +1,10 @@
-chrome.storage.sync.get(
+// Back button: restore param means user pressed Back — redirect straight to the article
+const restoreUrl = new URLSearchParams(window.location.search).get('restore');
+if (restoreUrl) {
+    window.location.replace(restoreUrl);
+}
+
+if (!restoreUrl) chrome.storage.sync.get(
     ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl'],
     (result) => {
         if (result.tabTakeoverEnabled === false) {
@@ -27,7 +33,7 @@ chrome.storage.sync.get(
             } else {
                 // One message: fetch entry + prepare iframe + cache article info
                 chrome.runtime.sendMessage({ action: 'loadFeedContent', feed: pick.value }, (response) => {
-                    if (response?.youtube) {
+                    if (response?.youtube && result.blockFocusEnabled !== false) {
                         showYouTubeCard(response.url, response.title, response.videoId);
                     } else {
                         loadUrl(response?.url || 'https://kagi.com/smallweb', result.blockFocusEnabled);
@@ -104,11 +110,12 @@ function loadUrl(url, blockFocusEnabled) {
         iframe.src = url;
         document.body.appendChild(iframe);
 
-        // Any link click or Escape inside the iframe breaks out to the real page.
-        // This restores full cookie/auth access and normal browsing.
+        // Link clicks and Escape break out of the iframe.
         window.addEventListener('message', (e) => {
             if (e.data?.type === 'kagi-navigate' && e.data.url) {
-                window.location.replace(e.data.url);
+                // Push the original article URL into our NTP's history so Back restores it
+                history.pushState(null, '', 'index.html?restore=' + encodeURIComponent(iframe.src));
+                window.location.href = e.data.url;
             }
         });
 

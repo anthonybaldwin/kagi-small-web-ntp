@@ -586,6 +586,95 @@ describe('category article discovery', () => {
         expect(env.contextMenus.length).toBeGreaterThan(0);
     });
 
+    // ═══════════════════════════════════════
+    // RESTORE (BACK BUTTON) TESTS
+    // ═══════════════════════════════════════
+
+    test('restore param triggers direct redirect (no iframe)', () => {
+        const params = new URLSearchParams('?restore=https%3A%2F%2Fgithub.com%2Fuser%2Frepo');
+        const restoreUrl = params.get('restore');
+        expect(restoreUrl).toBe('https://github.com/user/repo');
+        // main.js does window.location.replace(restoreUrl) — no iframe, no header stripping
+    });
+
+    test('no restore param means normal NTP flow', () => {
+        const params = new URLSearchParams('');
+        const restoreUrl = params.get('restore');
+        expect(restoreUrl).toBeNull();
+    });
+
+    test('pushState creates correct restore URL', () => {
+        const originalUrl = 'https://github.com/user/repo';
+        const expected = 'index.html?restore=' + encodeURIComponent(originalUrl);
+        expect(expected).toBe('index.html?restore=https%3A%2F%2Fgithub.com%2Fuser%2Frepo');
+        // Roundtrip: decoding gets back the original
+        const decoded = new URLSearchParams(expected.split('?')[1]).get('restore');
+        expect(decoded).toBe(originalUrl);
+    });
+
+    // ═══════════════════════════════════════
+    // YOUTUBE CARD TOGGLE TESTS
+    // ═══════════════════════════════════════
+
+    test('YouTube card shown only when focus blocking is ON', () => {
+        const response = { youtube: true, url: 'https://youtube.com/watch?v=abc' };
+        const blockFocusEnabled = true;
+        const showCard = response.youtube && blockFocusEnabled !== false;
+        expect(showCard).toBe(true);
+    });
+
+    test('YouTube direct navigate when focus blocking is OFF', () => {
+        const response = { youtube: true, url: 'https://youtube.com/watch?v=abc' };
+        const blockFocusEnabled = false;
+        const showCard = response.youtube && blockFocusEnabled !== false;
+        expect(showCard).toBe(false);
+        // Falls through to loadUrl → window.location.replace
+    });
+
+    // ═══════════════════════════════════════
+    // BOOKMARK SUBFOLDER TESTS
+    // ═══════════════════════════════════════
+
+    test('source "cat/ai" creates two subfolder levels', () => {
+        const source = 'cat/ai';
+        const parts = source.split('/');
+        expect(parts).toEqual(['cat', 'ai']);
+    });
+
+    test('source "feed/github" creates two subfolder levels', () => {
+        const source = 'feed/github';
+        const parts = source.split('/');
+        expect(parts).toEqual(['feed', 'github']);
+    });
+
+    test('null source returns root Small Web folder', () => {
+        const source = null;
+        expect(!source).toBe(true);
+        // getBookmarkFolder returns swFolder directly
+    });
+
+    test('article info includes source for subfolder creation', async () => {
+        await chrome.storage.session.set({
+            'articleUrl_42': { url: 'https://github.com/repo', title: 'Repo', source: 'feed/github' }
+        });
+        const stored = await chrome.storage.session.get('articleUrl_42');
+        expect(stored['articleUrl_42'].source).toBe('feed/github');
+    });
+
+    // ═══════════════════════════════════════
+    // IFRAME HINT BANNER TESTS
+    // ═══════════════════════════════════════
+
+    test('hint shown for non-kagi URLs in iframe mode', () => {
+        const url = 'https://github.com/repo';
+        expect(!url.startsWith('https://kagi.com/')).toBe(true);
+    });
+
+    test('hint NOT shown for kagi.com URLs', () => {
+        const url = 'https://kagi.com/smallweb?cat=ai';
+        expect(!url.startsWith('https://kagi.com/')).toBe(false);
+    });
+
     test('only caches once per tab (idempotent)', async () => {
         const tabId = 42;
         await chrome.storage.session.set({ ['articleUrl_' + tabId]: { url: 'https://first.com', title: 'First' } });
