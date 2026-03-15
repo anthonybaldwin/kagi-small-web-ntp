@@ -67,9 +67,8 @@ function showYouTubeCard(url, title, videoId) {
     // Full-bleed blurred background
     const bg = document.createElement('div');
     bg.style.cssText = 'position:fixed;inset:-20px;background:url(' + thumbUrl + ') center/cover no-repeat;filter:blur(30px) brightness(0.3);z-index:0;';
-    const card = document.createElement('a');
-    card.href = url;
-    card.style.cssText = 'display:block;text-decoration:none;position:fixed;inset:0;z-index:1;';
+    const card = document.createElement('div');
+    card.style.cssText = 'position:fixed;inset:0;z-index:1;';
 
     const img = document.createElement('img');
     img.src = 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg';
@@ -80,14 +79,15 @@ function showYouTubeCard(url, title, videoId) {
     const ns = 'http://www.w3.org/2000/svg';
     const playSvg = document.createElementNS(ns, 'svg');
     playSvg.setAttribute('viewBox', '0 0 68 48');
-    playSvg.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);cursor:pointer;width:min(10vw,100px);height:auto;';
-    card.onmouseenter = () => { rect.setAttribute('fill', '#ff0000'); };
-    card.onmouseleave = () => { rect.setAttribute('fill', 'rgba(255,0,0,0.85)'); };
+    const playBtn = document.createElement('a');
+    playBtn.href = url;
+    playBtn.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:block;padding:0;cursor:pointer;z-index:2;line-height:0;';
+    playSvg.style.cssText = 'width:min(8vw,80px);height:auto;pointer-events:none;filter:drop-shadow(0 0 6px rgba(0,0,0,0.3));';
     const rect = document.createElementNS(ns, 'rect');
     rect.setAttribute('width', '68');
     rect.setAttribute('height', '48');
     rect.setAttribute('rx', '14');
-    rect.setAttribute('fill', 'rgba(255,0,0,0.85)');
+    rect.setAttribute('fill', '#ff0000');
     const tri = document.createElementNS(ns, 'path');
     tri.setAttribute('d', 'M27 14l18 10-18 10z');
     tri.setAttribute('fill', 'white');
@@ -107,8 +107,9 @@ function showYouTubeCard(url, title, videoId) {
     bar.appendChild(ytLogo);
     bar.appendChild(titleEl);
 
+    playBtn.appendChild(playSvg);
     card.appendChild(img);
-    card.appendChild(playSvg);
+    card.appendChild(playBtn);
     card.appendChild(bar);
     document.body.appendChild(bg);
     document.body.appendChild(card);
