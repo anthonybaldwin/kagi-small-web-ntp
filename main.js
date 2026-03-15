@@ -5,7 +5,7 @@ if (restoreUrl) {
 }
 
 if (!restoreUrl) chrome.storage.sync.get(
-    ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl'],
+    ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'selectedCategories', 'selectedFeeds', 'customUrl'],
     (result) => {
         if (result.tabTakeoverEnabled === false) {
             chrome.runtime.sendMessage({ action: 'restoreDefaultNTP' });
@@ -22,13 +22,24 @@ if (!restoreUrl) chrome.storage.sync.get(
             ];
 
             if (options.length === 0) {
-                loadUrl('https://kagi.com/smallweb', result.blockFocusEnabled);
+                if (result.directMode) {
+                    chrome.runtime.sendMessage({ action: 'loadCategoryFromFeed' }, (response) => {
+                        loadUrl(response?.url || 'https://kagi.com/smallweb', result.blockFocusEnabled);
+                    });
+                } else {
+                    loadUrl('https://kagi.com/smallweb', result.blockFocusEnabled);
+                }
                 return;
             }
 
             const pick = options[Math.floor(Math.random() * options.length)];
 
-            if (pick.type === 'category') {
+            if (pick.type === 'category' && result.directMode) {
+                // Direct mode: load article from feed filtered by category
+                chrome.runtime.sendMessage({ action: 'loadCategoryFromFeed', category: pick.value }, (response) => {
+                    loadUrl(response?.url || 'https://kagi.com/smallweb?cat=' + pick.value, result.blockFocusEnabled);
+                });
+            } else if (pick.type === 'category') {
                 loadUrl('https://kagi.com/smallweb?cat=' + pick.value, result.blockFocusEnabled);
             } else {
                 // One message: fetch entry + prepare iframe + cache article info

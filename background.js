@@ -6,6 +6,14 @@ const ALL_CATEGORIES = [
 
 const ALL_FEEDS = ['blogs', 'appreciated', 'youtube', 'github', 'comics'];
 
+function decodeXmlEntities(s) {
+    return s
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+        .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(+c));
+}
+
 const FEED_ENDPOINTS = {
     blogs:       'https://kagi.com/api/v1/smallweb/feed/?nso',
     youtube:     'https://kagi.com/api/v1/smallweb/feed/?yt',
@@ -33,12 +41,15 @@ function parseAtomEntries(xml) {
 
         const href = block.match(/href="(https:\/\/[^"]+)"/);
         const titleTag = block.match(/<title[^>]*>([^<]+)<\/title>/);
+        const cats = [];
+        const catRe = /<category[^>]+term="([^"]+)"/g;
+        let catMatch;
+        while ((catMatch = catRe.exec(block))) cats.push(catMatch[1]);
         if (href) {
             entries.push({
-                title: (titleTag?.[1] || 'Untitled')
-                    .replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-                    .replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_, c) => String.fromCharCode(+c)),
-                url: href[1]
+                title: decodeXmlEntities(titleTag?.[1] || 'Untitled'),
+                url: href[1],
+                categories: cats
             });
         }
     }
@@ -341,6 +352,34 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     await prepareIframe(entry.url, sender.tab.id);
                 }
                 sendResponse({ url: entry.url, title: entry.title, youtube: !!ytId, videoId: ytId });
+            } catch (e) {
+                sendResponse({ url: null });
+            }
+        })();
+        return true;
+    }
+
+    // Category from blogs feed (direct article, no Kagi frame)
+    if (msg.action === 'loadCategoryFromFeed' && sender.tab) {
+        (async () => {
+            try {
+                const entry = await getRandomFeedEntry('blogs');
+                if (!entry) { sendResponse({ url: null }); return; }
+                // Filter by category if specified
+                if (msg.category) {
+                    const stored = await chrome.storage.local.get('feedData');
+                    const all = stored.feedData?.blogs?.entries || [];
+                    const filtered = all.filter(e => e.categories && e.categories.includes(msg.category));
+                    if (filtered.length === 0) { sendResponse({ url: null }); return; }
+                    const pick = filtered[Math.floor(Math.random() * filtered.length)];
+                    await setArticleInfo(sender.tab.id, pick.url, pick.title, 'cat/' + msg.category);
+                    await prepareIframe(pick.url, sender.tab.id);
+                    sendResponse({ url: pick.url, title: pick.title });
+                } else {
+                    await setArticleInfo(sender.tab.id, entry.url, entry.title, 'feed/blogs');
+                    await prepareIframe(entry.url, sender.tab.id);
+                    sendResponse({ url: entry.url, title: entry.title });
+                }
             } catch (e) {
                 sendResponse({ url: null });
             }

@@ -39,7 +39,7 @@ const CATEGORY_GROUPS = [
 ];
 
 const FEED_TYPES = [
-    { slug: 'blogs', emoji: '\uD83D\uDCDD', name: 'Small Web' },
+    { slug: 'blogs', emoji: '\uD83D\uDCDD', name: 'Blogs' },
     { slug: 'appreciated', emoji: '\u2B50', name: 'Appreciated' },
     { slug: 'youtube', emoji: '\uD83C\uDFAC', name: 'Videos' },
     { slug: 'github', emoji: '\uD83D\uDCBB', name: 'Code' },
@@ -55,6 +55,8 @@ const blockFocusToggle = document.getElementById('blockFocusToggle');
 const blockFocusToggleRow = document.getElementById('blockFocusToggleRow');
 const toggle = document.getElementById('smallWebToggle');
 const smallWebToggleRow = document.getElementById('smallWebToggleRow');
+const directModeToggle = document.getElementById('directModeToggle');
+const directModeRow = document.getElementById('directModeRow');
 const urlSection = document.getElementById('urlSection');
 const customUrlInput = document.getElementById('customUrl');
 let selectedCategories = new Set();
@@ -264,6 +266,7 @@ function updateSections() {
 
     blockFocusToggleRow.classList.toggle('disabled', !takeoverOn);
     smallWebToggleRow.classList.toggle('disabled', !takeoverOn);
+    directModeRow.classList.toggle('disabled', !takeoverOn || !smallWebOn);
 
     const showTabs = takeoverOn && smallWebOn;
     tabBar.classList.toggle('visible', showTabs);
@@ -310,6 +313,10 @@ toggle.addEventListener('change', () => {
     updateSections();
 });
 
+directModeToggle.addEventListener('change', () => {
+    chrome.storage.sync.set({ directMode: directModeToggle.checked });
+});
+
 customUrlInput.addEventListener('blur', () => {
     chrome.storage.sync.set({ customUrl: customUrlInput.value.trim() });
 });
@@ -321,10 +328,11 @@ customUrlInput.addEventListener('keydown', (e) => {
 });
 
 // ── Init ──
-chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl'], (result) => {
+chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'selectedCategories', 'selectedFeeds', 'customUrl'], (result) => {
     tabTakeoverToggle.checked = result.tabTakeoverEnabled !== false;
     blockFocusToggle.checked = result.blockFocusEnabled !== false;
     toggle.checked = result.smallWebEnabled || false;
+    directModeToggle.checked = result.directMode || false;
     selectedCategories = new Set(result.selectedCategories || []);
     selectedFeeds = new Set(result.selectedFeeds || []);
     customUrlInput.value = result.customUrl ?? '';
