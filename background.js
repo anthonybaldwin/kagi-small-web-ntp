@@ -257,10 +257,16 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     cleanupTab(tabId);
 });
 
-// Top-level navigation away from our NTP: clean up
-chrome.webNavigation.onCommitted.addListener((details) => {
+// Top-level navigation away from our NTP: clean up (but keep article info for YouTube)
+chrome.webNavigation.onCommitted.addListener(async (details) => {
     if (details.frameId === 0 && !details.url.startsWith('chrome-extension://')) {
-        cleanupTab(details.tabId);
+        const info = await getArticleInfo(details.tabId);
+        if (info && info.url === details.url) {
+            // Keep article info + context menu when navigating to the article itself (e.g. YouTube card)
+            await setContextMenu(true);
+        } else {
+            cleanupTab(details.tabId);
+        }
     }
 });
 
