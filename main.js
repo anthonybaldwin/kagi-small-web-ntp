@@ -69,20 +69,20 @@ function showYouTubeCard(url, title, videoId) {
     bg.style.cssText = 'position:fixed;inset:-20px;background:url(' + thumbUrl + ') center/cover no-repeat;filter:blur(30px) brightness(0.3);z-index:0;';
     const card = document.createElement('a');
     card.href = url;
-    card.style.cssText = 'display:block;text-decoration:none;position:relative;max-width:1200px;width:95%;z-index:1;';
+    card.style.cssText = 'display:block;text-decoration:none;position:fixed;inset:0;z-index:1;';
 
     const img = document.createElement('img');
     img.src = 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg';
-    img.style.cssText = 'width:100%;display:block;border-radius:16px;';
+    img.style.cssText = 'width:100%;height:100%;display:block;object-fit:cover;';
     img.onerror = () => { img.src = 'https://img.youtube.com/vi/' + videoId + '/hqdefault.jpg'; };
 
     // Official YouTube play button SVG (red rounded rect + white triangle)
     const ns = 'http://www.w3.org/2000/svg';
     const playSvg = document.createElementNS(ns, 'svg');
     playSvg.setAttribute('viewBox', '0 0 68 48');
-    playSvg.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);cursor:pointer;width:min(10vw,100px);height:auto;transition:transform 0.15s ease;';
-    card.onmouseenter = () => { rect.setAttribute('fill', '#ff0000'); playSvg.style.transform = 'translate(-50%,-50%) scale(1.1)'; };
-    card.onmouseleave = () => { rect.setAttribute('fill', 'rgba(255,0,0,0.85)'); playSvg.style.transform = 'translate(-50%,-50%) scale(1)'; };
+    playSvg.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);cursor:pointer;width:min(10vw,100px);height:auto;';
+    card.onmouseenter = () => { rect.setAttribute('fill', '#ff0000'); };
+    card.onmouseleave = () => { rect.setAttribute('fill', 'rgba(255,0,0,0.85)'); };
     const rect = document.createElementNS(ns, 'rect');
     rect.setAttribute('width', '68');
     rect.setAttribute('height', '48');
@@ -96,7 +96,7 @@ function showYouTubeCard(url, title, videoId) {
 
     // Title bar
     const bar = document.createElement('div');
-    bar.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:20px 24px;background:linear-gradient(transparent,rgba(0,0,0,0.8));border-radius:0 0 16px 16px;color:#fff;display:flex;align-items:center;gap:12px;';
+    bar.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:20px 24px;background:linear-gradient(transparent,rgba(0,0,0,0.8));color:#fff;display:flex;align-items:center;gap:12px;';
     const ytLogo = document.createElement('img');
     ytLogo.src = 'https://www.youtube.com/s/desktop/logo/yt_logo_mono_dark.svg';
     ytLogo.style.cssText = 'height:16px;opacity:0.9;flex-shrink:0;';
