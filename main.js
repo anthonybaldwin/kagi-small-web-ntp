@@ -78,20 +78,20 @@ function showYouTubeCard(url, title, videoId) {
     // Official YouTube play button SVG (red rounded rect + white triangle)
     const ns = 'http://www.w3.org/2000/svg';
     const playSvg = document.createElementNS(ns, 'svg');
-    playSvg.setAttribute('viewBox', '0 0 68 48');
+    playSvg.setAttribute('viewBox', '0 0 64 64');
     const playBtn = document.createElement('a');
     playBtn.href = url;
     playBtn.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:block;padding:0;cursor:pointer;z-index:2;line-height:0;';
-    playSvg.style.cssText = 'width:min(8vw,80px);height:auto;pointer-events:none;filter:drop-shadow(0 0 6px rgba(0,0,0,0.3));';
-    const rect = document.createElementNS(ns, 'rect');
-    rect.setAttribute('width', '68');
-    rect.setAttribute('height', '48');
-    rect.setAttribute('rx', '14');
-    rect.setAttribute('fill', '#ff0000');
+    playSvg.style.cssText = 'width:min(8vw,80px);height:auto;pointer-events:none;filter:drop-shadow(0 0 8px rgba(0,0,0,0.4));';
+    const circle = document.createElementNS(ns, 'circle');
+    circle.setAttribute('cx', '32');
+    circle.setAttribute('cy', '32');
+    circle.setAttribute('r', '30');
+    circle.setAttribute('fill', 'rgba(0,0,0,0.55)');
     const tri = document.createElementNS(ns, 'path');
-    tri.setAttribute('d', 'M27 14l18 10-18 10z');
+    tri.setAttribute('d', 'M25 18l18 14-18 14z');
     tri.setAttribute('fill', 'white');
-    playSvg.appendChild(rect);
+    playSvg.appendChild(circle);
     playSvg.appendChild(tri);
 
     // Title bar
@@ -138,8 +138,8 @@ function loadUrl(url, blockFocusEnabled) {
             hint.textContent = 'Viewing in a frame \u2014 press Esc or click any link to open directly';
             hint.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 14px;background:rgba(140,207,205,0.9);color:#0f0f10;font:12px/1 system-ui,sans-serif;font-weight:600;border-radius:8px;z-index:9999;transition:opacity 0.5s;pointer-events:none;';
             document.body.appendChild(hint);
-            setTimeout(() => { hint.style.opacity = '0'; }, 10000);
-            setTimeout(() => { hint.remove(); }, 10500);
+            setTimeout(() => { hint.style.opacity = '0'; }, 4000);
+            setTimeout(() => { hint.remove(); }, 4500);
         }
     } else {
         window.location.replace(url);
