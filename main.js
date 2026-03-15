@@ -1,6 +1,6 @@
 // Back button: restore param means user pressed Back — redirect straight to the article
 const restoreUrl = new URLSearchParams(window.location.search).get('restore');
-if (restoreUrl) {
+if (restoreUrl && /^https?:\/\//.test(restoreUrl)) {
     window.location.replace(restoreUrl);
 }
 
@@ -119,12 +119,13 @@ function loadUrl(url, blockFocusEnabled) {
     if (blockFocusEnabled !== false) {
         const iframe = document.createElement('iframe');
         iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups';
+        iframe.allow = "autoplay 'none'";
         iframe.src = url;
         document.body.appendChild(iframe);
 
         // Link clicks and Escape break out of the iframe.
         window.addEventListener('message', (e) => {
-            if (e.data?.type === 'kagi-navigate' && e.data.url) {
+            if (e.data?.type === 'kagi-navigate' && e.data.url && /^https?:\/\//.test(e.data.url)) {
                 // Push the original article URL into our NTP's history so Back restores it
                 history.pushState(null, '', 'index.html?restore=' + encodeURIComponent(iframe.src));
                 window.location.href = e.data.url;
@@ -134,7 +135,7 @@ function loadUrl(url, blockFocusEnabled) {
         // Subtle hint for feed pages (not kagi.com which handles framing natively)
         if (!url.startsWith('https://kagi.com/')) {
             const hint = document.createElement('div');
-            hint.textContent = 'Viewing in iframe \u2014 press Esc or click any link to open directly';
+            hint.textContent = 'Viewing in a frame \u2014 press Esc or click any link to open directly';
             hint.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 14px;background:rgba(140,207,205,0.9);color:#0f0f10;font:12px/1 system-ui,sans-serif;font-weight:600;border-radius:8px;z-index:9999;transition:opacity 0.5s;pointer-events:none;';
             document.body.appendChild(hint);
             setTimeout(() => { hint.style.opacity = '0'; }, 10000);

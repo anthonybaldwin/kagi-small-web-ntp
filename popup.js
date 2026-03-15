@@ -318,6 +318,10 @@ directModeToggle.addEventListener('change', () => {
 });
 
 customUrlInput.addEventListener('blur', () => {
+    const val = customUrlInput.value.trim();
+    if (val && !/^https?:\/\//.test(val)) {
+        customUrlInput.value = 'https://' + val;
+    }
     chrome.storage.sync.set({ customUrl: customUrlInput.value.trim() });
 });
 
