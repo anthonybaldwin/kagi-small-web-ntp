@@ -118,7 +118,7 @@ function showYouTubeCard(url, title, videoId) {
 function loadUrl(url, blockFocusEnabled) {
     if (blockFocusEnabled !== false) {
         const iframe = document.createElement('iframe');
-        iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups';
+        iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox';
         iframe.allow = "autoplay 'none'";
         iframe.src = url;
         document.body.appendChild(iframe);
