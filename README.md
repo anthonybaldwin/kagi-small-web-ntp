@@ -82,3 +82,9 @@ To swap fonts, drop `.ttf` files into `fonts/` and edit `fonts/font.config.json`
 ```
 
 Font files should be named `{prefix}-{Weight}.ttf` (e.g. `Lufga-Regular.ttf`, `Lufga-Bold.ttf`). Weights are detected automatically.
+
+## Attributions & Trademarks
+
+- **Kagi** — This extension uses the [Kagi Small Web](https://kagi.com/smallweb) API. Kagi logos, Small Web badges, and the "Use Kagi" GIF (`icons/`) are property of [Kagi Inc.](https://kagi.com) This extension is not affiliated with or endorsed by Kagi Inc.
+- **Microsoft** — "Bing" and "Cortana" are trademarks of Microsoft Corporation. This extension is not affiliated with or endorsed by Microsoft.
+- **Plus Jakarta Sans** — bundled font licensed under the [SIL Open Font License 1.1](fonts/OFL.txt). See [tokotype/PlusJakartaSans](https://github.com/tokotype/PlusJakartaSans).
