@@ -421,7 +421,44 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         appreciatePost(msg.url).then(ok => sendResponse({ success: ok }));
         return true;
     }
+
+    if (msg.action === 'searchDefault' && sender.tab) {
+        chrome.search.query({ text: msg.query, tabId: sender.tab.id });
+    }
 });
+
+// ═══════════════════════════════════════
+// BING/CORTANA → DEFAULT SEARCH ENGINE
+// ═══════════════════════════════════════
+
+const BING_REDIRECT_RULE_ID = 9999;
+
+async function setBingRedirect(enabled) {
+    if (enabled) {
+        const extUrl = chrome.runtime.getURL('redirect.html');
+        await chrome.declarativeNetRequest.updateDynamicRules({
+            removeRuleIds: [BING_REDIRECT_RULE_ID],
+            addRules: [{
+                id: BING_REDIRECT_RULE_ID,
+                priority: 2,
+                action: {
+                    type: 'redirect',
+                    redirect: {
+                        regexSubstitution: extUrl + '?q=\\1'
+                    }
+                },
+                condition: {
+                    regexFilter: '^https?://(?:www\\.)?bing\\.com/search\\?.*?q=([^&]*)',
+                    resourceTypes: ['main_frame']
+                }
+            }]
+        });
+    } else {
+        await chrome.declarativeNetRequest.updateDynamicRules({
+            removeRuleIds: [BING_REDIRECT_RULE_ID]
+        });
+    }
+}
 
 // ═══════════════════════════════════════
 // INIT & ICON
@@ -429,7 +466,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 chrome.runtime.onInstalled.addListener(() => {
     chrome.storage.sync.get(
-        ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl'],
+        ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl', 'bingRedirectEnabled'],
         (result) => {
             const defaults = {};
             if (result.tabTakeoverEnabled === undefined) defaults.tabTakeoverEnabled = true;
@@ -439,16 +476,18 @@ chrome.runtime.onInstalled.addListener(() => {
             if (result.selectedFeeds === undefined) defaults.selectedFeeds = ALL_FEEDS;
             if (result.customUrl === undefined) defaults.customUrl = '';
             if (Object.keys(defaults).length > 0) chrome.storage.sync.set(defaults);
+            setBingRedirect(result.bingRedirectEnabled || false);
         }
     );
     Object.keys(FEED_ENDPOINTS).forEach(name => getRandomFeedEntry(name));
 });
 
 chrome.runtime.onStartup.addListener(() => {
-    chrome.storage.sync.get(['selectedFeeds'], (result) => {
+    chrome.storage.sync.get(['selectedFeeds', 'bingRedirectEnabled'], (result) => {
         if (result.selectedFeeds === undefined) {
             chrome.storage.sync.set({ selectedFeeds: ALL_FEEDS });
         }
+        setBingRedirect(result.bingRedirectEnabled || false);
     });
     Object.keys(FEED_ENDPOINTS).forEach(name => getRandomFeedEntry(name));
 });
@@ -470,6 +509,9 @@ chrome.storage.sync.get(['blockFocusEnabled'], (result) => {
 chrome.storage.onChanged.addListener((changes) => {
     if (changes.tabTakeoverEnabled) {
         updateIcon(changes.tabTakeoverEnabled.newValue !== false);
+    }
+    if (changes.bingRedirectEnabled) {
+        setBingRedirect(changes.bingRedirectEnabled.newValue || false);
     }
     if (changes.blockFocusEnabled) {
         if (changes.blockFocusEnabled.newValue !== false) {
