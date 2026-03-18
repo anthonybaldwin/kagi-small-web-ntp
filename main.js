@@ -1,10 +1,15 @@
-// Back button: restore param means user pressed Back — redirect straight to the article
-const restoreUrl = new URLSearchParams(window.location.search).get('restore');
+// Handle query params: restore (back button) or q (Bing redirect)
+const params = new URLSearchParams(window.location.search);
+const restoreUrl = params.get('restore');
+const searchQuery = params.get('q');
 if (restoreUrl && /^https?:\/\//.test(restoreUrl)) {
     window.location.replace(restoreUrl);
 }
+if (searchQuery) {
+    chrome.runtime.sendMessage({ action: 'searchDefault', query: searchQuery });
+}
 
-if (!restoreUrl) chrome.storage.sync.get(
+if (!restoreUrl && !searchQuery) chrome.storage.sync.get(
     ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'selectedCategories', 'selectedFeeds', 'customUrl'],
     (result) => {
         if (result.tabTakeoverEnabled === false) {

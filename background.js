@@ -435,7 +435,7 @@ const BING_REDIRECT_RULE_ID = 9999;
 
 async function setBingRedirect(enabled) {
     if (enabled) {
-        const extUrl = chrome.runtime.getURL('redirect.html');
+        const extUrl = chrome.runtime.getURL('index.html');
         await chrome.declarativeNetRequest.updateDynamicRules({
             removeRuleIds: [BING_REDIRECT_RULE_ID],
             addRules: [{
