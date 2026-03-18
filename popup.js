@@ -57,8 +57,15 @@ const toggle = document.getElementById('smallWebToggle');
 const smallWebToggleRow = document.getElementById('smallWebToggleRow');
 const directModeToggle = document.getElementById('directModeToggle');
 const directModeRow = document.getElementById('directModeRow');
+const bingRedirectToggle = document.getElementById('bingRedirectToggle');
+const bingRedirectRow = document.getElementById('bingRedirectRow');
 const urlSection = document.getElementById('urlSection');
 const customUrlInput = document.getElementById('customUrl');
+
+// Show Bing/Cortana redirect toggle only on Windows
+if (navigator.userAgent.includes('Windows')) {
+    bingRedirectRow.style.display = '';
+}
 let selectedCategories = new Set();
 let selectedFeeds = new Set();
 let activeTab = 'categories';
@@ -262,6 +269,25 @@ function updateFeedCheckboxes() {
 
 function updateSections() {
     const takeoverOn = tabTakeoverToggle.checked;
+
+    // When Override New Tab is off, visually uncheck dependent toggles
+    // Stash real state on the element so we can restore without extra storage calls
+    if (!takeoverOn) {
+        blockFocusToggle._real = blockFocusToggle._real ?? blockFocusToggle.checked;
+        toggle._real = toggle._real ?? toggle.checked;
+        directModeToggle._real = directModeToggle._real ?? directModeToggle.checked;
+        blockFocusToggle.checked = false;
+        toggle.checked = false;
+        directModeToggle.checked = false;
+    } else if ('_real' in blockFocusToggle) {
+        blockFocusToggle.checked = blockFocusToggle._real;
+        toggle.checked = toggle._real;
+        directModeToggle.checked = directModeToggle._real;
+        delete blockFocusToggle._real;
+        delete toggle._real;
+        delete directModeToggle._real;
+    }
+
     const smallWebOn = toggle.checked;
 
     blockFocusToggleRow.classList.toggle('disabled', !takeoverOn);
@@ -317,6 +343,10 @@ directModeToggle.addEventListener('change', () => {
     chrome.storage.sync.set({ directMode: directModeToggle.checked });
 });
 
+bingRedirectToggle.addEventListener('change', () => {
+    chrome.storage.sync.set({ bingRedirectEnabled: bingRedirectToggle.checked });
+});
+
 customUrlInput.addEventListener('blur', () => {
     const val = customUrlInput.value.trim();
     if (val && !/^https?:\/\//.test(val)) {
@@ -332,11 +362,12 @@ customUrlInput.addEventListener('keydown', (e) => {
 });
 
 // ── Init ──
-chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'selectedCategories', 'selectedFeeds', 'customUrl'], (result) => {
+chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'bingRedirectEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl'], (result) => {
     tabTakeoverToggle.checked = result.tabTakeoverEnabled !== false;
     blockFocusToggle.checked = result.blockFocusEnabled !== false;
     toggle.checked = result.smallWebEnabled || false;
     directModeToggle.checked = result.directMode || false;
+    bingRedirectToggle.checked = result.bingRedirectEnabled || false;
     selectedCategories = new Set(result.selectedCategories || []);
     selectedFeeds = new Set(result.selectedFeeds || []);
     customUrlInput.value = result.customUrl ?? '';

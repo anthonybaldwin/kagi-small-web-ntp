@@ -88,34 +88,101 @@
 
         /* ── Toggle Section ── */
         .toggle-section {
-            padding: 10px 16px 4px;
+            padding: 6px 12px 6px;
             background: var(--bg-base);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .toggle-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            border: 1px solid rgba(140, 207, 205, 0.35);
+            border-radius: var(--radius-md);
+            padding: 2px;
+            background: rgba(140, 207, 205, 0.08);
+        }
+        .toggle-group .toggle-group {
+            grid-column: 1 / -1;
+            border: 1px dashed rgba(140, 207, 205, 0.35);
+            background: rgba(140, 207, 205, 0.06);
+            padding: 0;
+        }
+        .toggle-group--alt {
+            width: 50%;
+            grid-template-columns: 1fr;
+            border-color: rgba(63, 98, 168, 0.4);
+            background: rgba(63, 98, 168, 0.08);
+        }
+        .toggle-group--alt .toggle input:checked + .toggle-track {
+            background: rgba(63, 98, 168, 0.15);
+            border-color: rgba(63, 98, 168, 0.35);
+        }
+        .toggle-group--alt .toggle input:checked + .toggle-track::before {
+            background: #3f62a8;
+            box-shadow: 0 0 8px rgba(63, 98, 168, 0.3), 0 1px 2px rgba(0,0,0,0.2);
         }
         .toggle-row {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            padding: 5px 0;
+            gap: 5px;
+            padding: 4px 5px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            position: relative;
+        }
+        .toggle-row:hover {
+            background: rgba(140, 207, 205, 0.18);
+        }
+        .toggle-muted:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .toggle-group--alt .toggle-row:hover {
+            background: rgba(63, 98, 168, 0.2);
+        }
+        .toggle-row[data-tip]::after {
+            content: attr(data-tip);
+            position: absolute;
+            left: 6px;
+            bottom: 100%;
+            margin-bottom: 4px;
+            padding: 5px 8px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 10.5px;
+            font-weight: 400;
+            line-height: 1.3;
+            width: max-content;
+            max-width: 300px;
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+        }
+        .toggle-row[data-tip]:nth-child(even)::after {
+            left: auto;
+            right: 6px;
+        }
+        .toggle-row[data-tip]:hover::after {
+            opacity: 1;
         }
         .toggle-label {
-            font-size: 12.5px;
+            font-size: 11px;
             font-weight: 500;
             color: var(--text-primary);
             line-height: 1.2;
-        }
-        .toggle-desc {
-            font-size: 10.5px;
-            color: var(--text-muted);
-            margin-top: 2px;
-            font-weight: 400;
+            user-select: none;
+            white-space: nowrap;
         }
 
         /* Toggle Switch */
         .toggle {
             position: relative;
-            width: 36px;
-            height: 20px;
+            width: 32px;
+            height: 18px;
             flex-shrink: 0;
             cursor: pointer;
         }
@@ -129,15 +196,15 @@
             position: absolute;
             inset: 0;
             background: #2a2a2c;
-            border-radius: 10px;
+            border-radius: 9px;
             border: 1px solid var(--border);
             transition: all var(--transition-med);
         }
         .toggle-track::before {
             content: '';
             position: absolute;
-            width: 14px;
-            height: 14px;
+            width: 12px;
+            height: 12px;
             left: 2px;
             top: 2px;
             background: #6a6a6e;
@@ -150,7 +217,7 @@
             border-color: rgba(140, 207, 205, 0.3);
         }
         .toggle input:checked + .toggle-track::before {
-            transform: translateX(16px);
+            transform: translateX(14px);
             background: var(--accent);
             box-shadow: 0 0 8px rgba(140, 207, 205, 0.3), 0 1px 2px rgba(0,0,0,0.2);
         }
@@ -158,12 +225,15 @@
             outline: 2px solid var(--accent);
             outline-offset: 2px;
         }
-
-        .toggle-divider {
-            height: 1px;
-            background: var(--border-subtle);
-            margin: 2px 0;
+        .toggle-muted .toggle input:checked + .toggle-track {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
         }
+        .toggle-muted .toggle input:checked + .toggle-track::before {
+            background: #999;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
         .toggle-row.disabled {
             opacity: 0.35;
             pointer-events: none;
@@ -171,8 +241,8 @@
 
         /* ── URL Section ── */
         .url-section {
-            padding: 10px 16px 12px;
-            background: var(--bg-base);
+            grid-column: 1 / -1;
+            padding: 6px 6px 4px;
             border-top: 1px solid var(--border-subtle);
             display: none;
         }
@@ -290,37 +360,25 @@
             user-select: none;
         }
         .cat-item:hover {
-            background: var(--bg-hover);
+            background: rgba(140, 207, 205, 0.18);
         }
 
         .cat-item input[type="checkbox"] {
             appearance: none;
             -webkit-appearance: none;
-            width: 15px;
-            height: 15px;
-            border: 1.5px solid #3a3a3e;
-            border-radius: 4px;
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid rgba(140, 207, 205, 0.25);
+            border-radius: 50%;
             background: transparent;
             cursor: pointer;
             flex-shrink: 0;
-            position: relative;
-            transition: all var(--transition-fast);
+            transition: all var(--transition-med);
         }
         .cat-item input[type="checkbox"]:checked {
-            background: var(--green);
-            border-color: var(--green);
-            box-shadow: 0 0 6px rgba(140, 207, 205, 0.25);
-        }
-        .cat-item input[type="checkbox"]:checked::after {
-            content: '';
-            position: absolute;
-            left: 4px;
-            top: 1px;
-            width: 4.5px;
-            height: 8px;
-            border: solid #fff;
-            border-width: 0 2px 2px 0;
-            transform: rotate(45deg);
+            background: var(--accent);
+            border-color: var(--accent);
+            box-shadow: 0 0 6px rgba(140, 207, 205, 0.3);
         }
         .cat-item input[type="checkbox"]:focus-visible {
             outline: 2px solid var(--accent);
@@ -421,8 +479,40 @@
             text-transform: uppercase;
             letter-spacing: 0.06em;
             cursor: pointer;
+            position: relative;
             transition: color var(--transition-fast), border-color var(--transition-med),
                         text-shadow var(--transition-med);
+        }
+        .tab-btn[data-tip]::after {
+            content: attr(data-tip);
+            position: absolute;
+            left: 0;
+            bottom: 100%;
+            margin-bottom: 4px;
+            padding: 5px 8px;
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 10.5px;
+            font-weight: 400;
+            font-style: normal;
+            text-transform: none;
+            letter-spacing: normal;
+            line-height: 1.3;
+            width: max-content;
+            max-width: 300px;
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+        }
+        .tab-btn[data-tip]:last-child::after {
+            left: auto;
+            right: 0;
+        }
+        .tab-btn[data-tip]:hover::after {
+            opacity: 1;
         }
         .tab-btn:hover {
             color: var(--text-secondary);
@@ -496,61 +586,43 @@
     </div>
 
     <div class="toggle-section">
-        <div class="toggle-row">
-            <div>
-                <div class="toggle-label">Override New Tab page</div>
-                <div class="toggle-desc">Replace Chrome's default New Tab</div>
+        <div class="toggle-group">
+            <label class="toggle-row toggle-muted" data-tip="Replace Chrome's default New Tab">
+                <span class="toggle"><input type="checkbox" id="tabTakeoverToggle"><span class="toggle-track"></span></span>
+                <span class="toggle-label">Override New Tab</span>
+            </label>
+            <label class="toggle-row toggle-muted" id="blockFocusToggleRow" data-tip="View pages in a frame — press Esc or click a link to open directly">
+                <span class="toggle"><input type="checkbox" id="blockFocusToggle"><span class="toggle-track"></span></span>
+                <span class="toggle-label">Focus in address bar</span>
+            </label>
+            <div class="toggle-group">
+                <label class="toggle-row" id="smallWebToggleRow" data-tip="Randomly picks from selected categories and feeds">
+                    <span class="toggle"><input type="checkbox" id="smallWebToggle"><span class="toggle-track"></span></span>
+                    <span class="toggle-label">Categories & Feeds</span>
+                </label>
+                <label class="toggle-row" id="directModeRow" data-tip="Load articles directly from the feed">
+                    <span class="toggle"><input type="checkbox" id="directModeToggle"><span class="toggle-track"></span></span>
+                    <span class="toggle-label">Disable Kagi Frame</span>
+                </label>
+                <div class="url-section" id="urlSection">
+                    <div class="url-label">New tab URL</div>
+                    <input type="text" class="url-input" id="customUrl" placeholder="https://kagi.com">
+                </div>
             </div>
-            <label class="toggle">
-                <input type="checkbox" id="tabTakeoverToggle">
-                <span class="toggle-track"></span>
+        </div>
+        <div class="toggle-group toggle-group--alt" id="bingRedirectRow" style="display:none">
+            <label class="toggle-row" data-tip="Redirect Bing and Cortana to your default search engine">
+                <span class="toggle"><input type="checkbox" id="bingRedirectToggle"><span class="toggle-track"></span></span>
+                <span class="toggle-label">Redirect Bing</span>
             </label>
         </div>
-        <div class="toggle-divider"></div>
-        <div class="toggle-row" id="blockFocusToggleRow">
-            <div>
-                <div class="toggle-label">Keep focus in address bar</div>
-                <div class="toggle-desc">Loads content in an iframe on the New Tab page</div>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" id="blockFocusToggle">
-                <span class="toggle-track"></span>
-            </label>
-        </div>
-        <div class="toggle-divider"></div>
-        <div class="toggle-row" id="directModeRow">
-            <div>
-                <div class="toggle-label">Disable Kagi Frame</div>
-                <div class="toggle-desc">Load articles directly from the feed</div>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" id="directModeToggle">
-                <span class="toggle-track"></span>
-            </label>
-        </div>
-        <div class="toggle-divider"></div>
-        <div class="toggle-row" id="smallWebToggleRow">
-            <div>
-                <div class="toggle-label">Browse Categories & Feeds</div>
-                <div class="toggle-desc">Randomly picks from selected categories and feeds</div>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" id="smallWebToggle">
-                <span class="toggle-track"></span>
-            </label>
-        </div>
-    </div>
-
-    <div class="url-section" id="urlSection">
-        <div class="url-label">New tab URL</div>
-        <input type="text" class="url-input" id="customUrl" placeholder="https://kagi.com">
     </div>
 
     <div class="section-break"></div>
 
     <div id="tabBar" class="tab-bar">
-        <button class="tab-btn active" data-tab="categories">Categories</button>
-        <button class="tab-btn" data-tab="feeds">Feeds</button>
+        <button class="tab-btn active" data-tab="categories" data-tip="Small Web topic categories to include">Categories</button>
+        <button class="tab-btn" data-tab="feeds" data-tip="Content types like blogs, videos, and code">Feeds</button>
     </div>
 
     <div id="categoriesContainer" class="categories"></div>
