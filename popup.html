@@ -241,9 +241,10 @@
 
         /* ── URL Section ── */
         .url-section {
-            grid-column: 1 / -1;
-            padding: 6px 6px 4px;
-            border-top: 1px solid var(--border-subtle);
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--bg-raised);
             display: none;
         }
         .url-section.visible {
@@ -254,7 +255,7 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.08em;
-            color: var(--text-muted);
+            color: var(--text-secondary);
             margin-bottom: 8px;
         }
         .url-input {
@@ -604,11 +605,11 @@
                     <span class="toggle"><input type="checkbox" id="directModeToggle"><span class="toggle-track"></span></span>
                     <span class="toggle-label">Disable Kagi Frame</span>
                 </label>
-                <div class="url-section" id="urlSection">
-                    <div class="url-label">New tab URL</div>
-                    <input type="text" class="url-input" id="customUrl" placeholder="https://kagi.com">
-                </div>
             </div>
+        </div>
+        <div class="url-section" id="urlSection">
+            <div class="url-label">New tab URL</div>
+            <input type="text" class="url-input" id="customUrl" placeholder="https://kagi.com">
         </div>
         <div class="toggle-group toggle-group--alt" id="bingRedirectRow" style="display:none">
             <label class="toggle-row" data-tip="Redirect Bing and Cortana to your default search engine">
