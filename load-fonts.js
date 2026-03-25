@@ -1,18 +1,12 @@
 // Auto-load fonts from fonts/font.config.json.
 // Set "family" (display name) and "prefix" (filename prefix).
-// The loader tries standard weight suffixes: Regular, Medium, SemiBold, Bold, etc.
-// Only weights with matching files are loaded; missing ones are silently skipped.
+// The loader registers fonts for the weights bundled in fonts/.
 (async function () {
     const WEIGHTS = [
-        ['Thin', 100],
-        ['ExtraLight', 200],
-        ['Light', 300],
         ['Regular', 400],
         ['Medium', 500],
         ['SemiBold', 600],
-        ['Bold', 700],
-        ['ExtraBold', 800],
-        ['Black', 900]
+        ['Bold', 700]
     ];
 
     try {

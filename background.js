@@ -357,6 +357,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 if (!ytId) {
                     await prepareIframe(entry.url, sender.tab.id);
                 }
+                console.log('[Kagi NTP] source: feed/' + msg.feed + ' | URL:', entry.url);
                 sendResponse({ url: entry.url, title: entry.title, youtube: !!ytId, videoId: ytId });
             } catch (e) {
                 sendResponse({ url: null });
@@ -380,10 +381,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     const pick = filtered[Math.floor(Math.random() * filtered.length)];
                     await setArticleInfo(sender.tab.id, pick.url, pick.title, 'cat/' + msg.category);
                     await prepareIframe(pick.url, sender.tab.id);
+                    console.log('[Kagi NTP] source: cat/' + msg.category + ' | URL:', pick.url);
                     sendResponse({ url: pick.url, title: pick.title });
                 } else {
                     await setArticleInfo(sender.tab.id, entry.url, entry.title, 'feed/blogs');
                     await prepareIframe(entry.url, sender.tab.id);
+                    console.log('[Kagi NTP] source: feed/blogs (no category) | URL:', entry.url);
                     sendResponse({ url: entry.url, title: entry.title });
                 }
             } catch (e) {
