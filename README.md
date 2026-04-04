@@ -70,21 +70,29 @@ When viewing a Small Web article or feed page, three action icons appear in the 
 
 ## Fonts
 
-This extension ships with [Plus Jakarta Sans](https://github.com/tokotype/PlusJakartaSans) (SIL Open Font License). Kagi uses [Lufga](https://ladd-design.com/family/lufga/), which requires a license.
+This extension ships with [Pixelify Sans](https://github.com/nicholasglazer/pixelify-sans) (SIL Open Font License), a retro pixel font.
 
-To swap fonts, drop `.ttf` files into `fonts/` and edit `fonts/font.config.json`:
+To swap fonts, drop font files into `fonts/` and edit `fonts/font.config.json`. Variable fonts (single file, weight range) and static fonts (one file per weight) are both supported:
 
 ```json
+// Variable font
+{
+    "family": "Pixelify Sans",
+    "file": "PixelifySans-Variable.ttf",
+    "variable": true
+}
+
+// Static fonts
 {
     "family": "Lufga",
     "prefix": "Lufga"
 }
 ```
 
-Font files should be named `{prefix}-{Weight}.ttf` (e.g. `Lufga-Regular.ttf`, `Lufga-Bold.ttf`). Weights are detected automatically.
+Static font files should be named `{prefix}-{Weight}.ttf` (e.g. `Lufga-Regular.ttf`, `Lufga-Bold.ttf`). Weights are detected automatically.
 
 ## Attributions & Trademarks
 
 - **Kagi** — This extension uses the [Kagi Small Web](https://kagi.com/smallweb) API. Kagi logos, Small Web badges, and the "Use Kagi" GIF (`icons/`) are property of [Kagi Inc.](https://kagi.com) This extension is not affiliated with or endorsed by Kagi Inc.
 - **Microsoft** — "Bing" and "Cortana" are trademarks of Microsoft Corporation. This extension is not affiliated with or endorsed by Microsoft.
-- **Plus Jakarta Sans** — bundled font licensed under the [SIL Open Font License 1.1](fonts/OFL.txt). See [tokotype/PlusJakartaSans](https://github.com/tokotype/PlusJakartaSans).
+- **Pixelify Sans** — bundled font licensed under the [SIL Open Font License 1.1](fonts/OFL.txt). See [nicholasglazer/pixelify-sans](https://github.com/nicholasglazer/pixelify-sans).
