@@ -24,6 +24,20 @@ const FEED_ENDPOINTS = {
 
 const SMALLWEB_BASE = 'https://kagi.com/smallweb';
 
+// Feed entries (especially "appreciated") may wrap the real URL as
+// https://kagi.com/smallweb?url=ACTUAL — strip the wrapper so we
+// load the article directly and never show the /smallweb frame.
+function unwrapSmallwebUrl(url) {
+    try {
+        const u = new URL(url);
+        if (u.hostname === 'kagi.com' && u.pathname === '/smallweb') {
+            const inner = u.searchParams.get('url');
+            if (inner && /^https?:\/\//.test(inner)) return inner;
+        }
+    } catch (e) {}
+    return url;
+}
+
 // ═══════════════════════════════════════
 // FEED CACHING
 // ═══════════════════════════════════════
@@ -48,7 +62,7 @@ function parseAtomEntries(xml) {
         if (href) {
             entries.push({
                 title: decodeXmlEntities(titleTag?.[1] || 'Untitled'),
-                url: href[1],
+                url: unwrapSmallwebUrl(href[1]),
                 categories: cats
             });
         }
@@ -80,7 +94,10 @@ async function getRandomFeedEntry(feedName) {
     }
 
     if (entries.length === 0) return null;
-    return entries[Math.floor(Math.random() * entries.length)];
+    const entry = entries[Math.floor(Math.random() * entries.length)];
+    // Unwrap cached entries that predate the parse-time fix
+    entry.url = unwrapSmallwebUrl(entry.url);
+    return entry;
 }
 
 // ═══════════════════════════════════════
@@ -379,10 +396,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                     const filtered = all.filter(e => e.categories && e.categories.includes(msg.category));
                     if (filtered.length === 0) { sendResponse({ url: null }); return; }
                     const pick = filtered[Math.floor(Math.random() * filtered.length)];
-                    await setArticleInfo(sender.tab.id, pick.url, pick.title, 'cat/' + msg.category);
-                    await prepareIframe(pick.url, sender.tab.id);
-                    console.log('[Kagi NTP] source: cat/' + msg.category + ' | URL:', pick.url);
-                    sendResponse({ url: pick.url, title: pick.title });
+                    const url = unwrapSmallwebUrl(pick.url);
+                    await setArticleInfo(sender.tab.id, url, pick.title, 'cat/' + msg.category);
+                    await prepareIframe(url, sender.tab.id);
+                    console.log('[Kagi NTP] source: cat/' + msg.category + ' | URL:', url);
+                    sendResponse({ url, title: pick.title });
                 } else {
                     await setArticleInfo(sender.tab.id, entry.url, entry.title, 'feed/blogs');
                     await prepareIframe(entry.url, sender.tab.id);
@@ -406,8 +424,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     // Popup reads article info
     if (msg.action === 'getArticleInfo') {
-        getArticleInfo(msg.tabId)
-            .then(info => sendResponse(info));
+        const tabId = msg.tabId || sender.tab?.id;
+        getArticleInfo(tabId).then(info => sendResponse(info));
         return true;
     }
 

@@ -131,9 +131,14 @@ function loadUrl(url, blockFocusEnabled) {
         // Link clicks and Escape break out of the iframe.
         window.addEventListener('message', (e) => {
             if (e.data?.type === 'kagi-navigate' && e.data.url && /^https?:\/\//.test(e.data.url)) {
-                // Push the original article URL into our NTP's history so Back restores it
-                history.pushState(null, '', 'index.html?restore=' + encodeURIComponent(iframe.src));
-                window.location.href = e.data.url;
+                // Get the real article URL from background (iframe.src may be a
+                // kagi.com/smallweb wrapper that would show a different random
+                // article on back-navigation).
+                chrome.runtime.sendMessage({ action: 'getArticleInfo' }, (info) => {
+                    const restoreTarget = info?.url || iframe.src;
+                    history.pushState(null, '', 'index.html?restore=' + encodeURIComponent(restoreTarget));
+                    window.location.href = e.data.url;
+                });
             }
         });
 
