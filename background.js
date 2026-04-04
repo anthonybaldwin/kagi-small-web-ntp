@@ -179,7 +179,7 @@ async function setArticleInfo(tabId, url, title, source) {
     // Append to persistent history (max 50, dedup consecutive)
     try {
         const HISTORY_KEY = 'articleHistory';
-        const MAX = 50;
+        const MAX = 100;
         const stored = await chrome.storage.local.get(HISTORY_KEY);
         const history = stored[HISTORY_KEY] || [];
         if (history.length === 0 || history[0].url !== url) {
