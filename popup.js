@@ -3,51 +3,52 @@ const CATEGORY_GROUPS = [
         label: 'Tech & Science',
         categories: [
             { slug: 'ai', emoji: '\u2728', name: 'AI' },
-            { slug: 'science', emoji: '\u269B\uFE0F', name: 'Science' },
-            { slug: 'programming', emoji: '\uD83E\uDDE9', name: 'Programming' },
-            { slug: 'diy', emoji: '\uD83D\uDEE0\uFE0F', name: 'DIY & Making' },
-            { slug: 'tech', emoji: '\uD83D\uDCF1', name: 'Technology' },
-            { slug: 'hardware', emoji: '\uD83C\uDF9B\uFE0F', name: 'Hardware' },
-            { slug: 'infra', emoji: '\uD83D\uDEE1\uFE0F', name: 'Sysadmin & Security' },
-            { slug: 'web', emoji: '\uD83D\uDD78\uFE0F', name: 'Web & Internet' },
+            { slug: 'science', emoji: '\uD83E\uDDEA', name: 'Science' },
+            { slug: 'programming', emoji: '\uD83D\uDC8E', name: 'Programming' },
+            { slug: 'diy', emoji: '\uD83E\uDE84', name: 'DIY & Making' },
+            { slug: 'tech', emoji: '\uD83D\uDDA5\uFE0F', name: 'Technology' },
+            { slug: 'hardware', emoji: '\uD83D\uDDC3\uFE0F', name: 'Hardware' },
+            { slug: 'infra', emoji: '\uD83D\uDD12', name: 'Sysadmin & Security' },
+            { slug: 'web', emoji: '\uD83C\uDF10', name: 'Web & Internet' },
         ]
     },
     {
         label: 'Culture & Creative',
         categories: [
-            { slug: 'health', emoji: '\uD83C\uDFC3', name: 'Health & Fitness' },
-            { slug: 'art', emoji: '\uD83C\uDF0A', name: 'Art & Design' },
-            { slug: 'essays', emoji: '\uD83E\uDEB6', name: 'Essays' },
-            { slug: 'humanities', emoji: '\uD83C\uDFFA', name: 'Humanities' },
-            { slug: 'retro', emoji: '\uD83D\uDCBE', name: 'Retro' },
-            { slug: 'photography', emoji: '\uD83C\uDF04', name: 'Photography' },
-            { slug: 'culture', emoji: '\uD83C\uDFAD', name: 'Pop Culture' },
-            { slug: 'gaming', emoji: '\uD83D\uDD79\uFE0F', name: 'Gaming' },
+            { slug: 'health', emoji: '\uD83C\uDF3F', name: 'Health & Fitness' },
+            { slug: 'art', emoji: '\uD83C\uDFA8', name: 'Art & Design' },
+            { slug: 'essays', emoji: '\u270D\uFE0F', name: 'Essays' },
+            { slug: 'humanities', emoji: '\uD83C\uDFDB\uFE0F', name: 'Humanities' },
+            { slug: 'retro', emoji: '\uD83D\uDCFA', name: 'Retro' },
+            { slug: 'photography', emoji: '\uD83D\uDCF7', name: 'Photography' },
+            { slug: 'culture', emoji: '\uD83C\uDFAC', name: 'Pop Culture' },
+            { slug: 'gaming', emoji: '\uD83C\uDFAE', name: 'Gaming' },
         ]
     },
     {
         label: 'Life & World',
         categories: [
             { slug: 'society', emoji: '\uD83D\uDC65', name: 'Society' },
-            { slug: 'life', emoji: '\u2600\uFE0F', name: 'Life & Personal' },
-            { slug: 'food', emoji: '\uD83E\uDDD1\u200D\uD83C\uDF73', name: 'Food & Drink' },
-            { slug: 'travel', emoji: '\u2708\uFE0F', name: 'Travel & Outdoors' },
-            { slug: 'politics', emoji: '\uD83C\uDFA4', name: 'Politics' },
-            { slug: 'economy', emoji: '\uD83C\uDFB2', name: 'Economy' },
+            { slug: 'life', emoji: '\uD83C\uDF1F', name: 'Life & Personal' },
+            { slug: 'food', emoji: '\uD83C\uDF72', name: 'Food & Drink' },
+            { slug: 'travel', emoji: '\uD83C\uDFD5\uFE0F', name: 'Travel & Outdoors' },
+            { slug: 'politics', emoji: '\uD83C\uDFDB\uFE0F', name: 'Politics' },
+            { slug: 'economy', emoji: '\uD83D\uDCC8', name: 'Economy' },
         ]
     }
 ];
 
 const FEED_TYPES = [
-    { slug: 'blogs', emoji: '\uD83D\uDCDD', name: 'Blogs' },
-    { slug: 'appreciated', emoji: '\u2B50', name: 'Appreciated' },
-    { slug: 'youtube', emoji: '\uD83C\uDFAC', name: 'Videos' },
-    { slug: 'github', emoji: '\uD83D\uDCBB', name: 'Code' },
-    { slug: 'comics', emoji: '\uD83C\uDFA8', name: 'Comics' },
+    { slug: 'blogs', name: 'Blogs' },
+    { slug: 'appreciated', name: 'Appreciated' },
+    { slug: 'youtube', name: 'Videos' },
+    { slug: 'github', name: 'Code' },
+    { slug: 'comics', name: 'Comics' },
 ];
 
 const container = document.getElementById('categoriesContainer');
 const feedsContainer = document.getElementById('feedsContainer');
+const historyContainer = document.getElementById('historyContainer');
 const tabBar = document.getElementById('tabBar');
 const tabBtns = tabBar.querySelectorAll('.tab-btn');
 const tabTakeoverToggle = document.getElementById('tabTakeoverToggle');
@@ -75,7 +76,7 @@ function updateTabCounts() {
     tabBtns.forEach(btn => {
         if (btn.dataset.tab === 'categories') {
             btn.textContent = 'Categories (' + selectedCategories.size + ')';
-        } else {
+        } else if (btn.dataset.tab === 'feeds') {
             btn.textContent = 'Feeds (' + selectedFeeds.size + ')';
         }
     });
@@ -86,6 +87,8 @@ function switchTab(tab) {
     tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === activeTab));
     container.classList.toggle('visible', activeTab === 'categories');
     feedsContainer.classList.toggle('visible', activeTab === 'feeds');
+    historyContainer.classList.toggle('visible', activeTab === 'history');
+    if (activeTab === 'history') buildHistoryUI();
     chrome.storage.local.set({ lastPopupTab: activeTab });
 }
 
@@ -141,24 +144,20 @@ function buildUI() {
             save();
         });
 
-        const grid = document.createElement('div');
-        grid.className = 'cat-grid';
+        const pills = document.createElement('div');
+        pills.className = 'feed-pills';
 
         group.categories.forEach(cat => {
             const label = document.createElement('label');
-            label.className = 'cat-item';
+            label.className = 'feed-pill' + (selectedCategories.has(cat.slug) ? ' active' : '');
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.dataset.slug = cat.slug;
             checkbox.checked = selectedCategories.has(cat.slug);
 
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'cat-name';
-            nameSpan.textContent = cat.emoji + ' ' + cat.name;
-
             label.appendChild(checkbox);
-            label.appendChild(nameSpan);
+            label.appendChild(document.createTextNode(cat.emoji + ' ' + cat.name));
 
             checkbox.addEventListener('change', () => {
                 if (checkbox.checked) {
@@ -166,12 +165,13 @@ function buildUI() {
                 } else {
                     selectedCategories.delete(cat.slug);
                 }
+                label.classList.toggle('active', checkbox.checked);
                 save();
             });
-            grid.appendChild(label);
+            pills.appendChild(label);
         });
 
-        groupEl.appendChild(grid);
+        groupEl.appendChild(pills);
         container.appendChild(groupEl);
     });
 
@@ -189,56 +189,20 @@ function buildFeedsUI() {
     const groupEl = document.createElement('div');
     groupEl.className = 'cat-group';
 
-    const header = document.createElement('div');
-    header.className = 'cat-group-header';
-
-    const labelSpan = document.createElement('span');
-    labelSpan.className = 'cat-group-label';
-    labelSpan.textContent = 'Feed Types';
-
-    const actionsSpan = document.createElement('span');
-    actionsSpan.className = 'cat-group-actions';
-
-    const allBtn = document.createElement('button');
-    allBtn.textContent = 'All';
-    const noneBtn = document.createElement('button');
-    noneBtn.textContent = 'None';
-
-    actionsSpan.appendChild(allBtn);
-    actionsSpan.appendChild(noneBtn);
-    header.appendChild(labelSpan);
-    header.appendChild(actionsSpan);
-    groupEl.appendChild(header);
-
-    allBtn.addEventListener('click', () => {
-        FEED_TYPES.forEach(f => selectedFeeds.add(f.slug));
-        updateFeedCheckboxes();
-        saveFeeds();
-    });
-    noneBtn.addEventListener('click', () => {
-        selectedFeeds.clear();
-        updateFeedCheckboxes();
-        saveFeeds();
-    });
-
-    const grid = document.createElement('div');
-    grid.className = 'cat-grid';
+    const pills = document.createElement('div');
+    pills.className = 'feed-pills';
 
     FEED_TYPES.forEach(feed => {
         const label = document.createElement('label');
-        label.className = 'cat-item';
+        label.className = 'feed-pill' + (selectedFeeds.has(feed.slug) ? ' active' : '');
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.dataset.feed = feed.slug;
         checkbox.checked = selectedFeeds.has(feed.slug);
 
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'cat-name';
-        nameSpan.textContent = feed.emoji + ' ' + feed.name;
-
         label.appendChild(checkbox);
-        label.appendChild(nameSpan);
+        label.appendChild(document.createTextNode(feed.name));
 
         checkbox.addEventListener('change', () => {
             if (checkbox.checked) {
@@ -246,24 +210,170 @@ function buildFeedsUI() {
             } else {
                 selectedFeeds.delete(feed.slug);
             }
+            label.classList.toggle('active', checkbox.checked);
             saveFeeds();
         });
-        grid.appendChild(label);
+        pills.appendChild(label);
     });
 
-    groupEl.appendChild(grid);
+    groupEl.appendChild(pills);
     feedsContainer.appendChild(groupEl);
+}
+
+// ── Build History UI ──
+function buildHistoryUI() {
+    chrome.runtime.sendMessage({ action: 'getHistory' }, (history) => {
+        historyContainer.replaceChildren();
+
+        const header = document.createElement('div');
+        header.className = 'history-header';
+
+        const label = document.createElement('span');
+        label.className = 'history-header-label';
+        label.textContent = 'Recent Articles';
+
+        header.appendChild(label);
+
+        if (history.length > 0) {
+            const clearBtn = document.createElement('button');
+            clearBtn.className = 'history-clear';
+            clearBtn.textContent = 'Clear';
+            clearBtn.addEventListener('click', () => {
+                chrome.runtime.sendMessage({ action: 'clearHistory' }, () => buildHistoryUI());
+            });
+            header.appendChild(clearBtn);
+        }
+
+        historyContainer.appendChild(header);
+
+        if (history.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'history-empty';
+            empty.textContent = 'No articles viewed yet';
+            historyContainer.appendChild(empty);
+            return;
+        }
+
+        history.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'history-item';
+
+            const link = document.createElement('a');
+            link.className = 'history-item-link';
+            link.href = item.url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = item.title || item.url;
+            link.title = item.url;
+
+            const actions = document.createElement('div');
+            actions.className = 'history-item-actions';
+
+            // Bookmark
+            const star = document.createElement('img');
+            star.className = 'history-action';
+            star.src = 'icons/star-empty.svg';
+            star.title = 'Bookmark';
+            chrome.bookmarks.search({ url: item.url }, (results) => {
+                const exact = results.filter(b => b.url === item.url);
+                if (exact.length > 0) {
+                    star.src = 'icons/star-filled.svg';
+                    star.classList.add('done');
+                    star.title = 'Bookmarked';
+                }
+            });
+            star.addEventListener('click', () => {
+                chrome.bookmarks.search({ url: item.url }, (results) => {
+                    const exact = results.filter(b => b.url === item.url);
+                    if (exact.length > 0) {
+                        chrome.bookmarks.remove(exact[0].id, () => {
+                            star.src = 'icons/star-empty.svg';
+                            star.classList.remove('done');
+                            star.title = 'Bookmark';
+                        });
+                    } else {
+                        chrome.runtime.sendMessage({
+                            action: 'bookmarkArticle',
+                            url: item.url,
+                            title: item.title || item.url,
+                            source: item.source
+                        }, () => {
+                            star.src = 'icons/star-filled.svg';
+                            star.classList.add('done');
+                            star.title = 'Bookmarked';
+                        });
+                    }
+                });
+            });
+
+            // Reading List
+            const book = document.createElement('img');
+            book.className = 'history-action';
+            book.src = 'icons/book-empty.svg';
+            book.title = 'Add to Reading List';
+            (async () => {
+                try {
+                    const entries = await chrome.readingList.query({ url: item.url });
+                    if (entries.length > 0) {
+                        book.src = 'icons/book-filled.svg';
+                        book.classList.add('done');
+                        book.title = 'In Reading List';
+                    }
+                } catch (e) {}
+            })();
+            book.addEventListener('click', async () => {
+                try {
+                    const entries = await chrome.readingList.query({ url: item.url });
+                    if (entries.length > 0) {
+                        await chrome.readingList.removeEntry({ url: item.url });
+                        book.src = 'icons/book-empty.svg';
+                        book.classList.remove('done');
+                        book.title = 'Add to Reading List';
+                    } else {
+                        await chrome.readingList.addEntry({ url: item.url, title: item.title || item.url, hasBeenRead: false });
+                        book.src = 'icons/book-filled.svg';
+                        book.classList.add('done');
+                        book.title = 'In Reading List';
+                    }
+                } catch (e) {}
+            });
+
+            // Appreciate
+            const heart = document.createElement('img');
+            heart.className = 'history-action';
+            heart.src = 'icons/heart-empty.svg';
+            heart.title = 'Appreciate';
+            heart.addEventListener('click', () => {
+                chrome.runtime.sendMessage({ action: 'appreciatePost', url: item.url }, (response) => {
+                    if (response?.success) {
+                        heart.src = 'icons/heart-filled.svg';
+                        heart.classList.add('done');
+                        heart.title = 'Appreciated!';
+                    }
+                });
+            });
+
+            actions.appendChild(star);
+            actions.appendChild(book);
+            actions.appendChild(heart);
+            row.appendChild(link);
+            row.appendChild(actions);
+            historyContainer.appendChild(row);
+        });
+    });
 }
 
 function updateCheckboxes() {
     container.querySelectorAll('input[data-slug]').forEach(cb => {
         cb.checked = selectedCategories.has(cb.dataset.slug);
+        cb.closest('.feed-pill')?.classList.toggle('active', cb.checked);
     });
 }
 
 function updateFeedCheckboxes() {
     feedsContainer.querySelectorAll('input[data-feed]').forEach(cb => {
         cb.checked = selectedFeeds.has(cb.dataset.feed);
+        cb.closest('.feed-pill')?.classList.toggle('active', cb.checked);
     });
 }
 
@@ -300,9 +410,12 @@ function updateSections() {
     if (showTabs) {
         container.classList.toggle('visible', activeTab === 'categories');
         feedsContainer.classList.toggle('visible', activeTab === 'feeds');
+        historyContainer.classList.toggle('visible', activeTab === 'history');
+        if (activeTab === 'history') buildHistoryUI();
     } else {
         container.classList.remove('visible');
         feedsContainer.classList.remove('visible');
+        historyContainer.classList.remove('visible');
     }
     urlSection.classList.toggle('visible', takeoverOn && !smallWebOn);
 }

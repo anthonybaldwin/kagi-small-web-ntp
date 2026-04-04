@@ -176,6 +176,18 @@ async function setArticleInfo(tabId, url, title, source) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (activeTab?.id === tabId) await setContextMenu(true);
     } catch (e) {}
+    // Append to persistent history (max 50, dedup consecutive)
+    try {
+        const HISTORY_KEY = 'articleHistory';
+        const MAX = 50;
+        const stored = await chrome.storage.local.get(HISTORY_KEY);
+        const history = stored[HISTORY_KEY] || [];
+        if (history.length === 0 || history[0].url !== url) {
+            history.unshift({ url, title, source, timestamp: Date.now() });
+            if (history.length > MAX) history.length = MAX;
+            await chrome.storage.local.set({ [HISTORY_KEY]: history });
+        }
+    } catch (e) {}
 }
 
 async function getArticleInfo(tabId) {
@@ -426,6 +438,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === 'getArticleInfo') {
         const tabId = msg.tabId || sender.tab?.id;
         getArticleInfo(tabId).then(info => sendResponse(info));
+        return true;
+    }
+
+    if (msg.action === 'getHistory') {
+        chrome.storage.local.get('articleHistory', (stored) => {
+            sendResponse(stored.articleHistory || []);
+        });
+        return true;
+    }
+
+    if (msg.action === 'clearHistory') {
+        chrome.storage.local.remove('articleHistory', () => sendResponse({ success: true }));
         return true;
     }
 
