@@ -53,7 +53,10 @@ function parseAtomEntries(xml) {
         const block = xml.slice(start, end);
         pos = end + 8;
 
-        const href = block.match(/href="(https:\/\/[^"]+)"/);
+        // Prefer rel="alternate" links (the actual article) over rel="self" (the feed URL)
+        const altHref = block.match(/rel="alternate"[^>]*href="(https:\/\/[^"]+)"/)
+            || block.match(/href="(https:\/\/[^"]+)"[^>]*rel="alternate"/);
+        const href = altHref || block.match(/href="(https:\/\/[^"]+)"/);
         const titleTag = block.match(/<title[^>]*>([^<]+)<\/title>/);
         const cats = [];
         const catRe = /<category[^>]+term="([^"]+)"/g;
@@ -121,6 +124,13 @@ function youTubeVideoId(url) {
 
 // One function for all header stripping. Uses tabId as rule ID
 // so each tab gets its own rule — no collisions, no tracking Maps.
+// URLs that look like feeds/XML — skip content script injection so the
+// browser can render them natively (XML tree view or XSLT stylesheet).
+function isXmlUrl(url) {
+    const path = new URL(url).pathname.toLowerCase();
+    return /\.(xml|rss|atom|feed)$/.test(path) || /\/(feed|rss|atom)\/?$/.test(path);
+}
+
 async function prepareIframe(url, tabId) {
     const urlObj = new URL(url);
     if (urlObj.hostname === 'kagi.com') return; // static rules.json handles kagi.com
@@ -137,7 +147,7 @@ async function prepareIframe(url, tabId) {
                 type: 'modifyHeaders',
                 responseHeaders: [
                     { header: 'X-Frame-Options', operation: 'remove' },
-                    { header: 'Content-Security-Policy', operation: 'set', value: "object-src 'none'; base-uri 'self';" }
+                    { header: 'Content-Security-Policy', operation: 'set', value: "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; object-src 'none';" }
                 ]
             },
             condition: {
@@ -148,14 +158,18 @@ async function prepareIframe(url, tabId) {
         }]
     });
 
-    await chrome.scripting.registerContentScripts([{
-        id: scriptId,
-        matches: [urlObj.origin + '/*'],
-        js: ['block-focus.js'],
-        runAt: 'document_start',
-        world: 'MAIN',
-        allFrames: true
-    }]);
+    // Skip content script for XML/RSS — injecting into XML documents
+    // destroys the browser's native XML tree view and XSLT rendering.
+    if (!isXmlUrl(url)) {
+        await chrome.scripting.registerContentScripts([{
+            id: scriptId,
+            matches: [urlObj.origin + '/*'],
+            js: ['block-focus.js'],
+            runAt: 'document_start',
+            world: 'MAIN',
+            allFrames: true
+        }]);
+    }
 }
 
 function cleanupTab(tabId) {
@@ -179,7 +193,7 @@ async function setArticleInfo(tabId, url, title, source) {
     // Append to persistent history (max 50, dedup consecutive)
     try {
         const HISTORY_KEY = 'articleHistory';
-        const MAX = 50;
+        const MAX = 100;
         const stored = await chrome.storage.local.get(HISTORY_KEY);
         const history = stored[HISTORY_KEY] || [];
         if (history.length === 0 || history[0].url !== url) {
@@ -286,9 +300,18 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     cleanupTab(tabId);
 });
 
-// Top-level navigation away from our NTP: clean up (but keep article info for YouTube)
+// Top-level navigation: clean up stale state.
+// For our own extension pages (NTP refresh), clear old article info so the
+// new article gets recorded. For external pages, keep info if navigating
+// to the article itself (e.g. YouTube card click).
 chrome.webNavigation.onCommitted.addListener(async (details) => {
-    if (details.frameId === 0 && !details.url.startsWith('chrome-extension://')) {
+    if (details.frameId === 0 && details.url.startsWith('chrome-extension://')) {
+        // NTP refresh — don't cleanup here; main.js reads the previous
+        // article info for back-button history, then the new article's
+        // setArticleInfo overwrites it naturally.
+        return;
+    }
+    if (details.frameId === 0) {
         const info = await getArticleInfo(details.tabId);
         if (info && info.url === details.url) {
             // Keep article info + context menu when navigating to the article itself (e.g. YouTube card)
@@ -305,9 +328,6 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
 
     const tab = await chrome.tabs.get(details.tabId).catch(() => null);
     if (!tab?.active) return;
-
-    // Only cache once per tab
-    if (await getArticleInfo(details.tabId)) return;
 
     const frames = await chrome.webNavigation.getAllFrames({ tabId: details.tabId });
     const articleFrame = frames?.find(f =>

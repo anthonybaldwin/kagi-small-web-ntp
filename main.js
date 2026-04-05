@@ -1,17 +1,47 @@
-// Handle query params: restore (back button) or q (Bing redirect)
+// Handle query params: restore (link click back) or q (Bing redirect)
 const params = new URLSearchParams(window.location.search);
 const restoreUrl = params.get('restore');
 const searchQuery = params.get('q');
+const navType = performance.getEntriesByType('navigation')[0]?.type;
+
 if (restoreUrl && /^https?:\/\//.test(restoreUrl)) {
     window.location.replace(restoreUrl);
 }
+// Back from an external article reloads the extension page (real navigation,
+// not popstate). Detect via navigation type + history.state.
+const backRestore = navType === 'back_forward' && history.state?.restore && /^https?:\/\//.test(history.state.restore);
+if (backRestore) {
+    window.location.replace(history.state.restore);
+}
+// Within-page back (pushState): popstate fires without reload.
+window.addEventListener('popstate', (e) => {
+    if (e.state?.restore && /^https?:\/\//.test(e.state.restore)) {
+        window.location.replace(e.state.restore);
+    }
+});
 if (searchQuery) {
     chrome.runtime.sendMessage({ action: 'searchDefault', query: searchQuery });
 }
 
-if (!restoreUrl && !searchQuery) chrome.storage.sync.get(
+// Stuff back-button history immediately (before content loads).
+// Only on normal load/refresh — not back/forward navigations.
+if (!restoreUrl && !searchQuery && navType !== 'back_forward') {
+    chrome.tabs.getCurrent().then(tab => {
+        const key = 'articleUrl_' + tab.id;
+        chrome.storage.session.get(key).then(stored => {
+            if (stored[key]?.url) {
+                history.replaceState({ restore: stored[key].url }, '');
+                history.pushState(null, '');
+            }
+        });
+    }).catch(() => {});
+}
+
+// Load content unless we're restoring via back-button or URL params.
+if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
     ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'selectedCategories', 'selectedFeeds', 'customUrl'],
     (result) => {
+
         if (result.tabTakeoverEnabled === false) {
             chrome.runtime.sendMessage({ action: 'restoreDefaultNTP' });
             return;
@@ -121,6 +151,9 @@ function showYouTubeCard(url, title, videoId) {
 }
 
 function loadUrl(url, blockFocusEnabled) {
+    // Mark this history position so forward navigation restores this article.
+    history.replaceState({ restore: url }, '');
+
     if (blockFocusEnabled !== false) {
         const iframe = document.createElement('iframe');
         iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox';

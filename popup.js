@@ -254,7 +254,28 @@ function buildHistoryUI() {
             return;
         }
 
+        let lastDateLabel = '';
+        function getDateLabel(ts) {
+            const now = new Date();
+            const d = new Date(ts);
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const itemDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            const diff = (today - itemDay) / 86400000;
+            if (diff === 0) return 'Today';
+            if (diff === 1) return 'Yesterday';
+            if (diff < 7) return d.toLocaleDateString(undefined, { weekday: 'long' });
+            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        }
+
         history.forEach((item) => {
+            const dateLabel = getDateLabel(item.timestamp);
+            if (dateLabel !== lastDateLabel) {
+                lastDateLabel = dateLabel;
+                const sep = document.createElement('div');
+                sep.className = 'history-date-label';
+                sep.textContent = dateLabel;
+                historyContainer.appendChild(sep);
+            }
             const row = document.createElement('div');
             row.className = 'history-item';
 
