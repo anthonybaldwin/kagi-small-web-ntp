@@ -513,7 +513,7 @@ async function setBingRedirect(enabled) {
                     }
                 },
                 condition: {
-                    regexFilter: '^https?://(?:www\\.)?bing\\.com/search\\?.*?q=([^&]*)',
+                    regexFilter: '^https?://(?:www\\.)?bing\\.com/.*[?&]q=([^&]*)',
                     resourceTypes: ['main_frame']
                 }
             }]
