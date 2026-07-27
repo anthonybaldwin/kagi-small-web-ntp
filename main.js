@@ -39,7 +39,7 @@ if (!restoreUrl && !searchQuery && navType !== 'back_forward') {
 
 // Load content unless we're restoring via back-button or URL params.
 if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
-    ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'selectedCategories', 'selectedFeeds', 'customUrl'],
+    ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'kagiNewsEnabled', 'kagiNewsCategories', 'selectedCategories', 'selectedFeeds', 'customUrl'],
     (result) => {
 
         if (result.tabTakeoverEnabled === false) {
@@ -90,6 +90,16 @@ if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
                     }
                 });
             }
+        } else if (result.kagiNewsEnabled) {
+            // Slugs are interpolated into the news URL, so only accept known
+            // ones — synced storage may hold values written by other versions.
+            // Keep in sync with NEWS_CATEGORIES in popup.js.
+            const NEWS_SLUGS = new Set(['world', 'usa', 'business', 'tech', 'science', 'sports', 'gaming', 'onthisday']);
+            const stored = Array.isArray(result.kagiNewsCategories) ? result.kagiNewsCategories : [];
+            const cats = stored.filter(s => NEWS_SLUGS.has(s));
+            if (cats.length === 0) cats.push('world');
+            const slug = cats[Math.floor(Math.random() * cats.length)];
+            prepareAndLoad('https://news.kagi.com/' + slug + '/latest', result.blockFocusEnabled);
         } else {
             prepareAndLoad(result.customUrl || 'https://kagi.com', result.blockFocusEnabled);
         }

@@ -279,6 +279,44 @@
             box-shadow: 0 0 0 3px rgba(140, 207, 205, 0.08);
         }
 
+        /* ── Footer section (Bing toggle pinned below everything) ── */
+        .footer-section {
+            display: none;
+            padding: 4px 12px 8px;
+            background: var(--bg-base);
+            border-top: 1px solid var(--border-subtle);
+        }
+        .footer-section.visible { display: block; }
+
+        /* Full-width row inside a 2-col toggle-group (for the Kagi News row) */
+        .toggle-row--full { grid-column: 1 / -1; }
+
+        /* ── News category picker (inline under News toggle) ── */
+        .news-cats {
+            display: none;
+            padding: 6px 8px 4px;
+            border: 1px dashed rgba(140, 207, 205, 0.35);
+            border-radius: var(--radius-md);
+            background: rgba(140, 207, 205, 0.06);
+        }
+        .news-cats.visible { display: block; }
+        .news-cats-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            padding: 0 2px 2px;
+        }
+        .news-cats .feed-pills {
+            gap: 4px;
+            padding: 2px 0;
+        }
+        .news-cats .feed-pill {
+            padding: 3px 9px;
+            font-size: 11px;
+        }
+
         /* ── Divider between toggle and categories ── */
         .section-break {
             height: 1px;
@@ -761,17 +799,23 @@
                     <span class="toggle"><input type="checkbox" id="directModeToggle"><span class="toggle-track"></span></span>
                     <span class="toggle-label">Disable Kagi frame</span>
                 </label>
+                <label class="toggle-row" id="kagiNewsToggleRow" data-tip="Open new tabs to Kagi News (turns off Categories & Feeds and Redirect To)">
+                    <span class="toggle"><input type="checkbox" id="kagiNewsToggle"><span class="toggle-track"></span></span>
+                    <span class="toggle-label">Kagi News</span>
+                </label>
+                <label class="toggle-row" id="redirectToToggleRow" data-tip="Open new tabs to a custom URL (turns off Categories & Feeds and Kagi News)">
+                    <span class="toggle"><input type="checkbox" id="redirectToToggle"><span class="toggle-track"></span></span>
+                    <span class="toggle-label">Redirect to</span>
+                </label>
             </div>
+        </div>
+        <div class="news-cats" id="newsCats">
+            <div class="news-cats-label">Open to (random from selected)</div>
+            <div class="feed-pills" id="newsCatsPills"></div>
         </div>
         <div class="url-section" id="urlSection">
             <div class="url-label">New tab URL</div>
             <input type="text" class="url-input" id="customUrl" placeholder="https://kagi.com">
-        </div>
-        <div class="toggle-group toggle-group--alt" id="bingRedirectRow" style="display:none">
-            <label class="toggle-row" data-tip="Redirect Bing and Cortana to your default search engine">
-                <span class="toggle"><input type="checkbox" id="bingRedirectToggle"><span class="toggle-track"></span></span>
-                <span class="toggle-label">Redirect Bing</span>
-            </label>
         </div>
     </div>
 
@@ -786,6 +830,15 @@
     <div id="categoriesContainer" class="categories"></div>
     <div id="feedsContainer" class="feeds"></div>
     <div id="historyContainer" class="history"></div>
+
+    <div class="footer-section">
+        <div class="toggle-group toggle-group--alt" id="bingRedirectRow" style="display:none">
+            <label class="toggle-row" data-tip="Redirect Bing and Cortana to your default search engine">
+                <span class="toggle"><input type="checkbox" id="bingRedirectToggle"><span class="toggle-track"></span></span>
+                <span class="toggle-label">Redirect Bing</span>
+            </label>
+        </div>
+    </div>
 
     <script src="popup.js"></script>
 </body>

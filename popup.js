@@ -46,6 +46,17 @@ const FEED_TYPES = [
     { slug: 'comics', name: 'Comics' },
 ];
 
+const NEWS_CATEGORIES = [
+    { slug: 'world',     name: 'World' },
+    { slug: 'usa',       name: 'USA' },
+    { slug: 'business',  name: 'Business' },
+    { slug: 'tech',      name: 'Technology' },
+    { slug: 'science',   name: 'Science' },
+    { slug: 'sports',    name: 'Sports' },
+    { slug: 'gaming',    name: 'Gaming' },
+    { slug: 'onthisday', name: 'On This Day' },
+];
+
 const container = document.getElementById('categoriesContainer');
 const feedsContainer = document.getElementById('feedsContainer');
 const historyContainer = document.getElementById('historyContainer');
@@ -60,16 +71,52 @@ const directModeToggle = document.getElementById('directModeToggle');
 const directModeRow = document.getElementById('directModeRow');
 const bingRedirectToggle = document.getElementById('bingRedirectToggle');
 const bingRedirectRow = document.getElementById('bingRedirectRow');
+const kagiNewsToggle = document.getElementById('kagiNewsToggle');
+const kagiNewsToggleRow = document.getElementById('kagiNewsToggleRow');
+const redirectToToggle = document.getElementById('redirectToToggle');
+const redirectToToggleRow = document.getElementById('redirectToToggleRow');
+const newsCats = document.getElementById('newsCats');
+const newsCatsPills = document.getElementById('newsCatsPills');
 const urlSection = document.getElementById('urlSection');
 const customUrlInput = document.getElementById('customUrl');
 
-// Show Bing/Cortana redirect toggle only on Windows
-if (navigator.userAgent.includes('Windows')) {
+// Hidden settings (set in popup devtools):
+//   localStorage.setItem('show-redirect-bing', 'true')  — show the toggle in the UI
+//   localStorage.setItem('redirect-bing', 'true')       — turn the redirect on (independent of toggle visibility)
+// The redirect-bing flag is mirrored to/from chrome.storage on init and toggle change.
+if (localStorage.getItem('show-redirect-bing') === 'true') {
     bingRedirectRow.style.display = '';
+    document.querySelector('.footer-section').classList.add('visible');
 }
 let selectedCategories = new Set();
 let selectedFeeds = new Set();
 let activeTab = 'categories';
+let newsCategories = new Set(['world']);
+
+function buildNewsCatsUI() {
+    newsCatsPills.replaceChildren();
+    NEWS_CATEGORIES.forEach(cat => {
+        const label = document.createElement('label');
+        label.className = 'feed-pill' + (newsCategories.has(cat.slug) ? ' active' : '');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = newsCategories.has(cat.slug);
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(cat.name));
+        input.addEventListener('change', () => {
+            if (input.checked) newsCategories.add(cat.slug);
+            else newsCategories.delete(cat.slug);
+            // Never let the set go empty — at least one category must be selected.
+            if (newsCategories.size === 0) {
+                newsCategories.add(cat.slug);
+                input.checked = true;
+            }
+            label.classList.toggle('active', input.checked);
+            chrome.storage.sync.set({ kagiNewsCategories: [...newsCategories] });
+        });
+        newsCatsPills.appendChild(label);
+    });
+}
 
 // ── Tab switching ──
 function updateTabCounts() {
@@ -407,23 +454,35 @@ function updateSections() {
         blockFocusToggle._real = blockFocusToggle._real ?? blockFocusToggle.checked;
         toggle._real = toggle._real ?? toggle.checked;
         directModeToggle._real = directModeToggle._real ?? directModeToggle.checked;
+        kagiNewsToggle._real = kagiNewsToggle._real ?? kagiNewsToggle.checked;
+        redirectToToggle._real = redirectToToggle._real ?? redirectToToggle.checked;
         blockFocusToggle.checked = false;
         toggle.checked = false;
         directModeToggle.checked = false;
+        kagiNewsToggle.checked = false;
+        redirectToToggle.checked = false;
     } else if ('_real' in blockFocusToggle) {
         blockFocusToggle.checked = blockFocusToggle._real;
         toggle.checked = toggle._real;
         directModeToggle.checked = directModeToggle._real;
+        kagiNewsToggle.checked = kagiNewsToggle._real;
+        redirectToToggle.checked = redirectToToggle._real;
         delete blockFocusToggle._real;
         delete toggle._real;
         delete directModeToggle._real;
+        delete kagiNewsToggle._real;
+        delete redirectToToggle._real;
     }
 
     const smallWebOn = toggle.checked;
+    const newsOn = kagiNewsToggle.checked;
+    const redirectOn = redirectToToggle.checked;
 
     blockFocusToggleRow.classList.toggle('disabled', !takeoverOn);
     smallWebToggleRow.classList.toggle('disabled', !takeoverOn);
     directModeRow.classList.toggle('disabled', !takeoverOn || !smallWebOn);
+    kagiNewsToggleRow.classList.toggle('disabled', !takeoverOn);
+    redirectToToggleRow.classList.toggle('disabled', !takeoverOn);
 
     const showTabs = takeoverOn && smallWebOn;
     tabBar.classList.toggle('visible', showTabs);
@@ -438,7 +497,16 @@ function updateSections() {
         feedsContainer.classList.remove('visible');
         historyContainer.classList.remove('visible');
     }
-    urlSection.classList.toggle('visible', takeoverOn && !smallWebOn);
+    newsCats.classList.toggle('visible', takeoverOn && newsOn);
+    urlSection.classList.toggle('visible', takeoverOn && redirectOn);
+}
+
+// Exactly one of {smallWeb, kagiNews, redirectTo} is on while takeover is on.
+// If none are on after a toggle change, redirect-to is the safe default.
+function ensureContentMode() {
+    if (toggle.checked || kagiNewsToggle.checked || redirectToToggle.checked) return;
+    redirectToToggle.checked = true;
+    chrome.storage.sync.set({ redirectToEnabled: true });
 }
 
 function save() {
@@ -463,6 +531,14 @@ blockFocusToggle.addEventListener('change', () => {
 toggle.addEventListener('change', () => {
     chrome.storage.sync.set({ smallWebEnabled: toggle.checked });
     if (toggle.checked) {
+        if (kagiNewsToggle.checked) {
+            kagiNewsToggle.checked = false;
+            chrome.storage.sync.set({ kagiNewsEnabled: false });
+        }
+        if (redirectToToggle.checked) {
+            redirectToToggle.checked = false;
+            chrome.storage.sync.set({ redirectToEnabled: false });
+        }
         chrome.storage.sync.get(['blockFocusAutoEnabled'], (result) => {
             if (!result.blockFocusAutoEnabled) {
                 chrome.storage.sync.set({ blockFocusEnabled: true, blockFocusAutoEnabled: true });
@@ -470,6 +546,7 @@ toggle.addEventListener('change', () => {
             }
         });
     }
+    ensureContentMode();
     updateSections();
 });
 
@@ -479,6 +556,39 @@ directModeToggle.addEventListener('change', () => {
 
 bingRedirectToggle.addEventListener('change', () => {
     chrome.storage.sync.set({ bingRedirectEnabled: bingRedirectToggle.checked });
+    localStorage.setItem('redirect-bing', bingRedirectToggle.checked ? 'true' : 'false');
+});
+
+kagiNewsToggle.addEventListener('change', () => {
+    chrome.storage.sync.set({ kagiNewsEnabled: kagiNewsToggle.checked });
+    if (kagiNewsToggle.checked) {
+        if (toggle.checked) {
+            toggle.checked = false;
+            chrome.storage.sync.set({ smallWebEnabled: false });
+        }
+        if (redirectToToggle.checked) {
+            redirectToToggle.checked = false;
+            chrome.storage.sync.set({ redirectToEnabled: false });
+        }
+    }
+    ensureContentMode();
+    updateSections();
+});
+
+redirectToToggle.addEventListener('change', () => {
+    chrome.storage.sync.set({ redirectToEnabled: redirectToToggle.checked });
+    if (redirectToToggle.checked) {
+        if (toggle.checked) {
+            toggle.checked = false;
+            chrome.storage.sync.set({ smallWebEnabled: false });
+        }
+        if (kagiNewsToggle.checked) {
+            kagiNewsToggle.checked = false;
+            chrome.storage.sync.set({ kagiNewsEnabled: false });
+        }
+    }
+    ensureContentMode();
+    updateSections();
 });
 
 customUrlInput.addEventListener('blur', () => {
@@ -496,15 +606,30 @@ customUrlInput.addEventListener('keydown', (e) => {
 });
 
 // ── Init ──
-chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'bingRedirectEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl'], (result) => {
+chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'bingRedirectEnabled', 'kagiNewsEnabled', 'kagiNewsCategories', 'redirectToEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl'], (result) => {
     tabTakeoverToggle.checked = result.tabTakeoverEnabled !== false;
     blockFocusToggle.checked = result.blockFocusEnabled !== false;
     toggle.checked = result.smallWebEnabled || false;
     directModeToggle.checked = result.directMode || false;
-    bingRedirectToggle.checked = result.bingRedirectEnabled || false;
+    // Resolve bing redirect from localStorage flag (authoritative if set) or chrome.storage.
+    const bingFlag = localStorage.getItem('redirect-bing');
+    const bingFromStorage = result.bingRedirectEnabled || false;
+    const bingResolved = bingFlag === 'true' ? true : bingFlag === 'false' ? false : bingFromStorage;
+    bingRedirectToggle.checked = bingResolved;
+    if (bingResolved !== bingFromStorage) {
+        chrome.storage.sync.set({ bingRedirectEnabled: bingResolved });
+    }
+    kagiNewsToggle.checked = result.kagiNewsEnabled || false;
+    redirectToToggle.checked = result.redirectToEnabled || false;
+    const validSlugs = new Set(NEWS_CATEGORIES.map(c => c.slug));
+    const stored = Array.isArray(result.kagiNewsCategories) ? result.kagiNewsCategories : [];
+    const filtered = stored.filter(s => validSlugs.has(s));
+    newsCategories = new Set(filtered.length > 0 ? filtered : ['world']);
     selectedCategories = new Set(result.selectedCategories || []);
     selectedFeeds = new Set(result.selectedFeeds || []);
     customUrlInput.value = result.customUrl ?? '';
+    ensureContentMode();
+    buildNewsCatsUI();
 
     // Pick the right tab: restore last used, or auto-switch to feeds if categories are empty
     chrome.storage.local.get(['lastPopupTab'], (local) => {
