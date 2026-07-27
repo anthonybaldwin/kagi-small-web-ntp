@@ -91,9 +91,13 @@ if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
                 });
             }
         } else if (result.kagiNewsEnabled) {
-            const cats = Array.isArray(result.kagiNewsCategories) && result.kagiNewsCategories.length > 0
-                ? result.kagiNewsCategories
-                : ['world'];
+            // Slugs are interpolated into the news URL, so only accept known
+            // ones — synced storage may hold values written by other versions.
+            // Keep in sync with NEWS_CATEGORIES in popup.js.
+            const NEWS_SLUGS = new Set(['world', 'usa', 'business', 'tech', 'science', 'sports', 'gaming', 'onthisday']);
+            const stored = Array.isArray(result.kagiNewsCategories) ? result.kagiNewsCategories : [];
+            const cats = stored.filter(s => NEWS_SLUGS.has(s));
+            if (cats.length === 0) cats.push('world');
             const slug = cats[Math.floor(Math.random() * cats.length)];
             prepareAndLoad('https://news.kagi.com/' + slug + '/latest', result.blockFocusEnabled);
         } else {
