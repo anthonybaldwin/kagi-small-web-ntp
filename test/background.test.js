@@ -6,7 +6,30 @@ import { createChromeMock } from './chrome-mock.js';
 // We extract the testable functions by reading the source
 // ═══════════════════════════════════════
 
-// Parse Atom entries — extracted from background.js for direct testing
+// Mirrors background.js — keep in sync when the parser changes.
+const XML_NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+
+function decodeXmlEntities(s) {
+    return s.replace(/&(amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);/g, (match, body) => {
+        if (body[0] !== '#') return XML_NAMED_ENTITIES[body];
+        const hex = body[1] === 'x' || body[1] === 'X';
+        const code = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
+        if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) return match;
+        return String.fromCodePoint(code);
+    });
+}
+
+function unwrapSmallwebUrl(url) {
+    try {
+        const u = new URL(url);
+        if (u.hostname === 'kagi.com' && u.pathname === '/smallweb') {
+            const inner = u.searchParams.get('url');
+            if (inner && /^https?:\/\//.test(inner)) return inner;
+        }
+    } catch (e) {}
+    return url;
+}
+
 function parseAtomEntries(xml) {
     const entries = [];
     let pos = 0;
@@ -17,14 +40,20 @@ function parseAtomEntries(xml) {
         if (end === -1) break;
         const block = xml.slice(start, end);
         pos = end + 8;
-        const href = block.match(/href="(https:\/\/[^"]+)"/);
+
+        const altHref = block.match(/rel="alternate"[^>]*href="(https:\/\/[^"]+)"/)
+            || block.match(/href="(https:\/\/[^"]+)"[^>]*rel="alternate"/);
+        const href = altHref || block.match(/href="(https:\/\/[^"]+)"/);
         const titleTag = block.match(/<title[^>]*>([^<]+)<\/title>/);
+        const cats = [];
+        const catRe = /<category[^>]+term="([^"]+)"/g;
+        let catMatch;
+        while ((catMatch = catRe.exec(block))) cats.push(catMatch[1]);
         if (href) {
             entries.push({
-                title: (titleTag?.[1] || 'Untitled')
-                    .replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-                    .replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_, c) => String.fromCharCode(+c)),
-                url: href[1]
+                title: decodeXmlEntities(titleTag?.[1] || 'Untitled'),
+                url: unwrapSmallwebUrl(decodeXmlEntities(href[1])),
+                categories: cats
             });
         }
     }
@@ -50,8 +79,8 @@ describe('parseAtomEntries', () => {
         </feed>`;
         const entries = parseAtomEntries(xml);
         expect(entries).toHaveLength(2);
-        expect(entries[0]).toEqual({ title: 'First Post', url: 'https://example.com/post1' });
-        expect(entries[1]).toEqual({ title: 'Second Post', url: 'https://example.com/post2' });
+        expect(entries[0]).toEqual({ title: 'First Post', url: 'https://example.com/post1', categories: [] });
+        expect(entries[1]).toEqual({ title: 'Second Post', url: 'https://example.com/post2', categories: [] });
     });
 
     test('decodes HTML entities in titles', () => {
@@ -93,6 +122,30 @@ describe('parseAtomEntries', () => {
         const entries = parseAtomEntries(xml);
         expect(entries[0].title).toBe('Untitled');
     });
+
+    test('decodes hex character references', () => {
+        const xml = `<entry><title>It&#x2019;s here</title><link href="https://example.com/x" /></entry>`;
+        const entries = parseAtomEntries(xml);
+        expect(entries[0].title).toBe('It’s here');
+    });
+
+    test('does not double-decode escaped entities', () => {
+        const xml = `<entry><title>Literal &amp;lt; sign</title><link href="https://example.com/x" /></entry>`;
+        const entries = parseAtomEntries(xml);
+        expect(entries[0].title).toBe('Literal &lt; sign');
+    });
+
+    test('decodes &amp; inside href attributes', () => {
+        const xml = `<entry><title>Q</title><link href="https://example.com/page?a=1&amp;b=2" /></entry>`;
+        const entries = parseAtomEntries(xml);
+        expect(entries[0].url).toBe('https://example.com/page?a=1&b=2');
+    });
+
+    test('unwraps kagi.com/smallweb?url= wrapper links', () => {
+        const xml = `<entry><title>W</title><link href="https://kagi.com/smallweb?url=https%3A%2F%2Fcoolblog.com%2Fpost" /></entry>`;
+        const entries = parseAtomEntries(xml);
+        expect(entries[0].url).toBe('https://coolblog.com/post');
+    });
 });
 
 // ═══════════════════════════════════════
@@ -100,16 +153,16 @@ describe('parseAtomEntries', () => {
 // ═══════════════════════════════════════
 
 function youTubeVideoId(url) {
+    let id = null;
     try {
         const u = new URL(url);
-        if (u.hostname.includes('youtube.com')) {
-            return u.searchParams.get('v') || u.pathname.match(/\/(?:shorts|embed)\/([^/?]+)/)?.[1];
-        }
-        if (u.hostname === 'youtu.be') {
-            return u.pathname.slice(1).split('/')[0];
+        if (u.hostname === 'youtube.com' || u.hostname.endsWith('.youtube.com')) {
+            id = u.searchParams.get('v') || u.pathname.match(/\/(?:shorts|embed)\/([^/?]+)/)?.[1];
+        } else if (u.hostname === 'youtu.be') {
+            id = u.pathname.slice(1).split('/')[0];
         }
     } catch (e) {}
-    return null;
+    return id && /^[A-Za-z0-9_-]{5,20}$/.test(id) ? id : null;
 }
 
 describe('youTubeVideoId', () => {
@@ -135,6 +188,16 @@ describe('youTubeVideoId', () => {
 
     test('returns null/undefined for YouTube channel pages', () => {
         expect(youTubeVideoId('https://www.youtube.com/@channel')).toBeFalsy();
+    });
+
+    test('rejects lookalike hostnames', () => {
+        expect(youTubeVideoId('https://evil-youtube.com/watch?v=dQw4w9WgXcQ')).toBeNull();
+        expect(youTubeVideoId('https://youtube.com.evil.com/watch?v=dQw4w9WgXcQ')).toBeNull();
+    });
+
+    test('rejects IDs with characters unsafe for URL/CSS interpolation', () => {
+        expect(youTubeVideoId('https://www.youtube.com/watch?v=abc)%20url(https://evil.com/x')).toBeNull();
+        expect(youTubeVideoId('https://www.youtube.com/watch?v="><script>')).toBeNull();
     });
 });
 

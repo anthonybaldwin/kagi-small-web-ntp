@@ -6,12 +6,18 @@ const ALL_CATEGORIES = [
 
 const ALL_FEEDS = ['blogs', 'appreciated', 'youtube', 'github', 'comics'];
 
+// Single-pass decode so already-escaped sequences like "&amp;lt;" come out
+// as the literal "&lt;" instead of being double-decoded to "<".
+const XML_NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+
 function decodeXmlEntities(s) {
-    return s
-        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
-        .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-        .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(+c));
+    return s.replace(/&(amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);/g, (match, body) => {
+        if (body[0] !== '#') return XML_NAMED_ENTITIES[body];
+        const hex = body[1] === 'x' || body[1] === 'X';
+        const code = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
+        if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) return match;
+        return String.fromCodePoint(code);
+    });
 }
 
 const FEED_ENDPOINTS = {
@@ -65,7 +71,9 @@ function parseAtomEntries(xml) {
         if (href) {
             entries.push({
                 title: decodeXmlEntities(titleTag?.[1] || 'Untitled'),
-                url: unwrapSmallwebUrl(href[1]),
+                // hrefs are XML attribute values — "&amp;" etc. must be decoded
+                // or URLs with query strings break when fetched.
+                url: unwrapSmallwebUrl(decodeXmlEntities(href[1])),
                 categories: cats
             });
         }
@@ -107,19 +115,21 @@ async function getRandomFeedEntry(feedName) {
 // IFRAME PREPARATION
 // ═══════════════════════════════════════
 
-// YouTube embeds don't work from chrome-extension:// origins directly,
-// but our youtube.html wrapper page hosts the embed from our extension origin.
+// YouTube embeds don't work from chrome-extension:// origins, so main.js
+// renders a thumbnail card instead — this extracts the video ID for it.
+// The ID is interpolated into thumbnail URLs and inline styles on the NTP
+// page, so only accept real YouTube hosts and URL-safe-base64 IDs.
 function youTubeVideoId(url) {
+    let id = null;
     try {
         const u = new URL(url);
-        if (u.hostname.includes('youtube.com')) {
-            return u.searchParams.get('v') || u.pathname.match(/\/(?:shorts|embed)\/([^/?]+)/)?.[1];
-        }
-        if (u.hostname === 'youtu.be') {
-            return u.pathname.slice(1).split('/')[0];
+        if (u.hostname === 'youtube.com' || u.hostname.endsWith('.youtube.com')) {
+            id = u.searchParams.get('v') || u.pathname.match(/\/(?:shorts|embed)\/([^/?]+)/)?.[1];
+        } else if (u.hostname === 'youtu.be') {
+            id = u.pathname.slice(1).split('/')[0];
         }
     } catch (e) {}
-    return null;
+    return id && /^[A-Za-z0-9_-]{5,20}$/.test(id) ? id : null;
 }
 
 // One function for all header stripping. Uses tabId as rule ID
@@ -133,11 +143,16 @@ function isXmlUrl(url) {
 
 async function prepareIframe(url, tabId) {
     const urlObj = new URL(url);
-    if (urlObj.hostname === 'kagi.com') return; // static rules.json handles kagi.com
+    const isKagi = urlObj.hostname === 'kagi.com';
 
+    // Always clear any per-tab script left over from a previous article
+    // (NTP refresh reuses the tab without a cleanup-triggering navigation).
     const scriptId = 'block-focus-' + tabId;
     await chrome.scripting.unregisterContentScripts({ ids: [scriptId] }).catch(() => {});
 
+    // Header stripping is session-scoped to this tab's sub_frames only —
+    // including for kagi.com — so no site's framing protections are ever
+    // weakened for requests originating from ordinary web pages.
     await chrome.declarativeNetRequest.updateSessionRules({
         removeRuleIds: [tabId],
         addRules: [{
@@ -147,7 +162,9 @@ async function prepareIframe(url, tabId) {
                 type: 'modifyHeaders',
                 responseHeaders: [
                     { header: 'X-Frame-Options', operation: 'remove' },
-                    { header: 'Content-Security-Policy', operation: 'set', value: "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; object-src 'none';" }
+                    { header: 'Content-Security-Policy', operation: 'set', value: isKagi
+                        ? "object-src 'none'; base-uri 'self';"
+                        : "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; object-src 'none';" }
                 ]
             },
             condition: {
@@ -157,6 +174,10 @@ async function prepareIframe(url, tabId) {
             }
         }]
     });
+
+    // kagi.com is covered by the statically registered block-focus script;
+    // registering a second copy would double-inject and break focus restore.
+    if (isKagi) return;
 
     // Skip content script for XML/RSS — injecting into XML documents
     // destroys the browser's native XML tree view and XSLT rendering.
@@ -314,7 +335,11 @@ chrome.webNavigation.onCommitted.addListener(async (details) => {
     if (details.frameId === 0) {
         const info = await getArticleInfo(details.tabId);
         if (info && info.url === details.url) {
-            // Keep article info + context menu when navigating to the article itself (e.g. YouTube card)
+            // Keep article info + context menu when navigating to the article
+            // itself (iframe breakout, YouTube card) — but the header rule and
+            // injected script are no longer needed once the frame is gone.
+            chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [details.tabId] });
+            chrome.scripting.unregisterContentScripts({ ids: ['block-focus-' + details.tabId] }).catch(() => {});
             await setContextMenu(true);
         } else {
             cleanupTab(details.tabId);
@@ -557,7 +582,7 @@ chrome.runtime.onStartup.addListener(() => {
     Object.keys(FEED_ENDPOINTS).forEach(name => getRandomFeedEntry(name));
 });
 
-// Focus-blocking script for kagi.com (static rules.json handles headers)
+// Focus-blocking script for kagi.com (header rules are added per-tab in prepareIframe)
 chrome.storage.sync.get(['blockFocusEnabled'], (result) => {
     if (result.blockFocusEnabled !== false) {
         chrome.scripting.registerContentScripts([{

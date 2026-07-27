@@ -59,10 +59,11 @@ if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
             if (options.length === 0) {
                 if (result.directMode) {
                     chrome.runtime.sendMessage({ action: 'loadCategoryFromFeed' }, (response) => {
-                        loadUrl(response?.url || 'https://kagi.com/smallweb', result.blockFocusEnabled);
+                        if (response?.url) loadUrl(response.url, result.blockFocusEnabled);
+                        else prepareAndLoad('https://kagi.com/smallweb', result.blockFocusEnabled);
                     });
                 } else {
-                    loadUrl('https://kagi.com/smallweb', result.blockFocusEnabled);
+                    prepareAndLoad('https://kagi.com/smallweb', result.blockFocusEnabled);
                 }
                 return;
             }
@@ -72,28 +73,40 @@ if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
             if (pick.type === 'category' && result.directMode) {
                 // Direct mode: load article from feed filtered by category
                 chrome.runtime.sendMessage({ action: 'loadCategoryFromFeed', category: pick.value }, (response) => {
-                    loadUrl(response?.url || 'https://kagi.com/smallweb?cat=' + pick.value, result.blockFocusEnabled);
+                    if (response?.url) loadUrl(response.url, result.blockFocusEnabled);
+                    else prepareAndLoad('https://kagi.com/smallweb?cat=' + pick.value, result.blockFocusEnabled);
                 });
             } else if (pick.type === 'category') {
-                loadUrl('https://kagi.com/smallweb?cat=' + pick.value, result.blockFocusEnabled);
+                prepareAndLoad('https://kagi.com/smallweb?cat=' + pick.value, result.blockFocusEnabled);
             } else {
                 // One message: fetch entry + prepare iframe + cache article info
                 chrome.runtime.sendMessage({ action: 'loadFeedContent', feed: pick.value }, (response) => {
                     if (response?.youtube && result.blockFocusEnabled !== false) {
                         showYouTubeCard(response.url, response.title, response.videoId);
+                    } else if (response?.url) {
+                        loadUrl(response.url, result.blockFocusEnabled);
                     } else {
-                        loadUrl(response?.url || 'https://kagi.com/smallweb', result.blockFocusEnabled);
+                        prepareAndLoad('https://kagi.com/smallweb', result.blockFocusEnabled);
                     }
                 });
             }
         } else {
-            const url = result.customUrl || 'https://kagi.com';
-            chrome.runtime.sendMessage({ action: 'prepareIframe', url }, () => {
-                loadUrl(url, result.blockFocusEnabled);
-            });
+            prepareAndLoad(result.customUrl || 'https://kagi.com', result.blockFocusEnabled);
         }
     }
 );
+
+// Ask the background to install this tab's header-stripping rule before the
+// iframe request fires. Direct navigation (focus blocking off) needs no rule.
+function prepareAndLoad(url, blockFocusEnabled) {
+    if (blockFocusEnabled !== false) {
+        chrome.runtime.sendMessage({ action: 'prepareIframe', url }, () => {
+            loadUrl(url, blockFocusEnabled);
+        });
+    } else {
+        loadUrl(url, blockFocusEnabled);
+    }
+}
 
 function showYouTubeCard(url, title, videoId) {
     const thumbUrl = 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg';
@@ -161,8 +174,13 @@ function loadUrl(url, blockFocusEnabled) {
         iframe.src = url;
         document.body.appendChild(iframe);
 
-        // Link clicks and Escape break out of the iframe.
+        // Link clicks and Escape break out of the iframe. Only trust messages
+        // from the framed page's own origin — the sandbox intentionally
+        // withholds allow-top-navigation, and without this check any nested
+        // third-party frame could navigate the tab without a user gesture.
+        const frameOrigin = new URL(url).origin;
         window.addEventListener('message', (e) => {
+            if (e.origin !== frameOrigin) return;
             if (e.data?.type === 'kagi-navigate' && e.data.url && /^https?:\/\//.test(e.data.url)) {
                 // Get the real article URL from background (iframe.src may be a
                 // kagi.com/smallweb wrapper that would show a different random
