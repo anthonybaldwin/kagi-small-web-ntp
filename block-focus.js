@@ -1,5 +1,16 @@
 // Block all focus-stealing during page load. Runs at document_start in MAIN world.
 (function () {
+    // Registered content scripts match by origin, not tab, so this can also be
+    // injected into unrelated tabs that happen to load the same site. When
+    // framed, only act if the top-level page is an extension page (our NTP) —
+    // otherwise we'd suppress focus() and hijack link clicks in frames that
+    // have nothing to do with us.
+    if (window.top !== window) {
+        const ancestors = window.location.ancestorOrigins;
+        const topOrigin = ancestors && ancestors.length ? ancestors[ancestors.length - 1] : '';
+        if (!topOrigin.startsWith('chrome-extension://')) return;
+    }
+
     const BLOCK_MS = 2000;
 
     // 1. Override .focus() on all relevant prototypes so script calls are no-ops

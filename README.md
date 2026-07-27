@@ -64,9 +64,11 @@ When viewing a Small Web article or feed page, three action icons appear in the 
 
 ## Security
 
-- Feed pages are loaded in sandboxed iframes that cannot navigate your browser
-- Header modifications are scoped to the specific new tab and cleaned up when you navigate away or close the tab
-- Clicking any link breaks out of the iframe, restoring full browser functionality
+- Feed pages are loaded in sandboxed iframes that cannot navigate your browser on their own
+- Header modifications (`X-Frame-Options`/CSP stripping) are session rules scoped to sub-frames of the specific new tab — including for kagi.com — and are cleaned up when you break out of the frame, navigate away, or close the tab; no site's framing protections are weakened for requests made by ordinary web pages
+- Frame break-out messages are only accepted from the framed page's own origin, so nested third-party frames cannot navigate the tab
+- The focus-blocking helper script deactivates itself in frames that are not embedded by the extension's new tab page
+- Clicking any link or pressing Escape breaks out of the iframe, restoring full browser functionality
 
 ## Fonts
 
