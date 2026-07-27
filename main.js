@@ -39,7 +39,7 @@ if (!restoreUrl && !searchQuery && navType !== 'back_forward') {
 
 // Load content unless we're restoring via back-button or URL params.
 if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
-    ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'selectedCategories', 'selectedFeeds', 'customUrl'],
+    ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'kagiNewsEnabled', 'kagiNewsCategories', 'selectedCategories', 'selectedFeeds', 'customUrl'],
     (result) => {
 
         if (result.tabTakeoverEnabled === false) {
@@ -90,6 +90,12 @@ if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
                     }
                 });
             }
+        } else if (result.kagiNewsEnabled) {
+            const cats = Array.isArray(result.kagiNewsCategories) && result.kagiNewsCategories.length > 0
+                ? result.kagiNewsCategories
+                : ['world'];
+            const slug = cats[Math.floor(Math.random() * cats.length)];
+            prepareAndLoad('https://news.kagi.com/' + slug + '/latest', result.blockFocusEnabled);
         } else {
             prepareAndLoad(result.customUrl || 'https://kagi.com', result.blockFocusEnabled);
         }
