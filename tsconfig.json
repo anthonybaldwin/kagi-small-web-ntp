@@ -8,6 +8,10 @@
     "jsx": "react-jsx",
     "allowJs": true,
 
+    // TypeScript 7 no longer auto-includes node_modules/@types ("types"
+    // defaults to []), so bun's globals have to be requested explicitly.
+    "types": ["bun"],
+
     // Bundler mode
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
