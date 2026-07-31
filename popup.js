@@ -46,22 +46,56 @@ const FEED_TYPES = [
     { slug: 'comics', name: 'Comics' },
 ];
 
-const container = document.getElementById('categoriesContainer');
-const feedsContainer = document.getElementById('feedsContainer');
-const historyContainer = document.getElementById('historyContainer');
-const tabBar = document.getElementById('tabBar');
-const tabBtns = tabBar.querySelectorAll('.tab-btn');
-const tabTakeoverToggle = document.getElementById('tabTakeoverToggle');
-const blockFocusToggle = document.getElementById('blockFocusToggle');
-const blockFocusToggleRow = document.getElementById('blockFocusToggleRow');
-const toggle = document.getElementById('smallWebToggle');
-const smallWebToggleRow = document.getElementById('smallWebToggleRow');
-const directModeToggle = document.getElementById('directModeToggle');
-const directModeRow = document.getElementById('directModeRow');
-const bingRedirectToggle = document.getElementById('bingRedirectToggle');
-const bingRedirectRow = document.getElementById('bingRedirectRow');
-const urlSection = document.getElementById('urlSection');
-const customUrlInput = document.getElementById('customUrl');
+/**
+ * The subset of chrome.storage.sync this popup reads and writes. Declared
+ * here rather than shared with background.js — the two run as separate
+ * scripts with no module graph between them.
+ *
+ * @typedef {object} Settings
+ * @property {boolean} [tabTakeoverEnabled]
+ * @property {boolean} [blockFocusEnabled]
+ * @property {boolean} [smallWebEnabled]
+ * @property {boolean} [directMode]
+ * @property {boolean} [bingRedirectEnabled]
+ * @property {string[]} [selectedCategories]
+ * @property {string[]} [selectedFeeds]
+ * @property {string} [customUrl]
+ */
+
+/**
+ * What background.js reports about the article in a tab.
+ *
+ * @typedef {object} ArticleInfo
+ * @property {string} url
+ * @property {string} [title]
+ * @property {string | null} [source]
+ */
+
+/**
+ * updateSections() stashes a toggle's real state on the element itself so it
+ * can be restored without another storage round-trip.
+ *
+ * @typedef {HTMLInputElement & { _real?: boolean }} StashInput
+ */
+
+// These all exist in popup.html — a missing one is a markup bug, not a
+// runtime condition, so the lookups are cast rather than null-checked.
+const container = /** @type {HTMLElement} */ (document.getElementById('categoriesContainer'));
+const feedsContainer = /** @type {HTMLElement} */ (document.getElementById('feedsContainer'));
+const historyContainer = /** @type {HTMLElement} */ (document.getElementById('historyContainer'));
+const tabBar = /** @type {HTMLElement} */ (document.getElementById('tabBar'));
+const tabBtns = /** @type {NodeListOf<HTMLElement>} */ (tabBar.querySelectorAll('.tab-btn'));
+const tabTakeoverToggle = /** @type {HTMLInputElement} */ (document.getElementById('tabTakeoverToggle'));
+const blockFocusToggle = /** @type {StashInput} */ (document.getElementById('blockFocusToggle'));
+const blockFocusToggleRow = /** @type {HTMLElement} */ (document.getElementById('blockFocusToggleRow'));
+const toggle = /** @type {StashInput} */ (document.getElementById('smallWebToggle'));
+const smallWebToggleRow = /** @type {HTMLElement} */ (document.getElementById('smallWebToggleRow'));
+const directModeToggle = /** @type {StashInput} */ (document.getElementById('directModeToggle'));
+const directModeRow = /** @type {HTMLElement} */ (document.getElementById('directModeRow'));
+const bingRedirectToggle = /** @type {HTMLInputElement} */ (document.getElementById('bingRedirectToggle'));
+const bingRedirectRow = /** @type {HTMLElement} */ (document.getElementById('bingRedirectRow'));
+const urlSection = /** @type {HTMLElement} */ (document.getElementById('urlSection'));
+const customUrlInput = /** @type {HTMLInputElement} */ (document.getElementById('customUrl'));
 
 // Show Bing/Cortana redirect toggle only on Windows
 if (navigator.userAgent.includes('Windows')) {
@@ -69,6 +103,7 @@ if (navigator.userAgent.includes('Windows')) {
 }
 let selectedCategories = new Set();
 let selectedFeeds = new Set();
+/** @type {string | undefined} */
 let activeTab = 'categories';
 
 // ── Tab switching ──
@@ -82,6 +117,7 @@ function updateTabCounts() {
     });
 }
 
+/** @param {string | undefined} tab */
 function switchTab(tab) {
     activeTab = tab;
     tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === activeTab));
@@ -220,9 +256,19 @@ function buildFeedsUI() {
     feedsContainer.appendChild(groupEl);
 }
 
+/**
+ * One row of the persistent article history kept by the service worker.
+ *
+ * @typedef {object} HistoryItem
+ * @property {string} url
+ * @property {string} [title]
+ * @property {string | null} [source]
+ * @property {number} timestamp
+ */
+
 // ── Build History UI ──
 function buildHistoryUI() {
-    chrome.runtime.sendMessage({ action: 'getHistory' }, (history) => {
+    chrome.runtime.sendMessage({ action: 'getHistory' }, (/** @type {HistoryItem[]} */ history) => {
         historyContainer.replaceChildren();
 
         const header = document.createElement('div');
@@ -255,12 +301,13 @@ function buildHistoryUI() {
         }
 
         let lastDateLabel = '';
+        /** @param {number} ts */
         function getDateLabel(ts) {
             const now = new Date();
             const d = new Date(ts);
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const itemDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-            const diff = (today - itemDay) / 86400000;
+            const diff = (today.getTime() - itemDay.getTime()) / 86400000;
             if (diff === 0) return 'Today';
             if (diff === 1) return 'Yesterday';
             if (diff < 7) return d.toLocaleDateString(undefined, { weekday: 'long' });
@@ -306,7 +353,7 @@ function buildHistoryUI() {
             star.addEventListener('click', () => {
                 chrome.bookmarks.search({ url: item.url }, (results) => {
                     const exact = results.filter(b => b.url === item.url);
-                    if (exact.length > 0) {
+                    if (exact[0]) {
                         chrome.bookmarks.remove(exact[0].id, () => {
                             star.src = 'icons/star-empty.svg';
                             star.classList.remove('done');
@@ -385,14 +432,14 @@ function buildHistoryUI() {
 }
 
 function updateCheckboxes() {
-    container.querySelectorAll('input[data-slug]').forEach(cb => {
+    /** @type {NodeListOf<HTMLInputElement>} */ (container.querySelectorAll('input[data-slug]')).forEach(cb => {
         cb.checked = selectedCategories.has(cb.dataset.slug);
         cb.closest('.feed-pill')?.classList.toggle('active', cb.checked);
     });
 }
 
 function updateFeedCheckboxes() {
-    feedsContainer.querySelectorAll('input[data-feed]').forEach(cb => {
+    /** @type {NodeListOf<HTMLInputElement>} */ (feedsContainer.querySelectorAll('input[data-feed]')).forEach(cb => {
         cb.checked = selectedFeeds.has(cb.dataset.feed);
         cb.closest('.feed-pill')?.classList.toggle('active', cb.checked);
     });
@@ -411,9 +458,9 @@ function updateSections() {
         toggle.checked = false;
         directModeToggle.checked = false;
     } else if ('_real' in blockFocusToggle) {
-        blockFocusToggle.checked = blockFocusToggle._real;
-        toggle.checked = toggle._real;
-        directModeToggle.checked = directModeToggle._real;
+        blockFocusToggle.checked = blockFocusToggle._real ?? false;
+        toggle.checked = toggle._real ?? false;
+        directModeToggle.checked = directModeToggle._real ?? false;
         delete blockFocusToggle._real;
         delete toggle._real;
         delete directModeToggle._real;
@@ -496,7 +543,7 @@ customUrlInput.addEventListener('keydown', (e) => {
 });
 
 // ── Init ──
-chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'bingRedirectEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl'], (result) => {
+chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'bingRedirectEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl'], (/** @type {Settings} */ result) => {
     tabTakeoverToggle.checked = result.tabTakeoverEnabled !== false;
     blockFocusToggle.checked = result.blockFocusEnabled !== false;
     toggle.checked = result.smallWebEnabled || false;
@@ -507,7 +554,7 @@ chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEna
     customUrlInput.value = result.customUrl ?? '';
 
     // Pick the right tab: restore last used, or auto-switch to feeds if categories are empty
-    chrome.storage.local.get(['lastPopupTab'], (local) => {
+    chrome.storage.local.get(['lastPopupTab'], (/** @type {{ lastPopupTab?: string }} */ local) => {
         if (selectedCategories.size === 0 && selectedFeeds.size > 0) {
             activeTab = 'feeds';
         } else if (local.lastPopupTab) {
@@ -517,26 +564,33 @@ chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEna
 
     // ── Action icons: ask background for the cached article info ──
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (!tabs[0]) return;
-        chrome.runtime.sendMessage({ action: 'getArticleInfo', tabId: tabs[0].id }, (info) => {
+        const activeTabInfo = tabs[0];
+        if (!activeTabInfo) return;
+        chrome.runtime.sendMessage({ action: 'getArticleInfo', tabId: activeTabInfo.id }, (info) => {
             if (info?.url) {
-                setupActionIcons(tabs[0].id, info);
+                setupActionIcons(activeTabInfo.id, info);
             }
         });
     });
 
+    /**
+     * @param {number | undefined} tabId
+     * @param {ArticleInfo} article
+     */
     function setupActionIcons(tabId, article) {
         const articleUrl = article.url;
         const knownTitle = article.title;
 
         // ── Bookmark Star ──
-        const star = document.getElementById('bookmarkStar');
+        const star = /** @type {HTMLImageElement} */ (document.getElementById('bookmarkStar'));
+        /** @type {string | null} */
         let bookmarkId = null;
 
         function updateStar() {
             chrome.bookmarks.search({ url: articleUrl }, (results) => {
                 const exact = results.filter(b => b.url === articleUrl);
-                bookmarkId = exact.length > 0 ? exact[0].id : null;
+                const existing = exact[0];
+                bookmarkId = existing ? existing.id : null;
                 star.src = bookmarkId ? 'icons/star-filled.svg' : 'icons/star-empty.svg';
                 star.classList.toggle('active', !!bookmarkId);
                 star.title = bookmarkId ? 'Remove bookmark' : 'Bookmark this page';
@@ -561,7 +615,7 @@ chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEna
         updateStar();
 
         // ── Reading List Book ──
-        const bookBtn = document.getElementById('readingListBtn');
+        const bookBtn = /** @type {HTMLImageElement} */ (document.getElementById('readingListBtn'));
         let inReadingList = false;
 
         async function updateBook() {
@@ -590,7 +644,7 @@ chrome.storage.sync.get(['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEna
         updateBook();
 
         // ── Appreciate Heart ──
-        const heartBtn = document.getElementById('appreciateBtn');
+        const heartBtn = /** @type {HTMLImageElement} */ (document.getElementById('appreciateBtn'));
         let appreciated = false;
 
         heartBtn.addEventListener('click', async () => {

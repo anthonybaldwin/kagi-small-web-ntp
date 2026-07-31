@@ -7,7 +7,7 @@
     // have nothing to do with us.
     if (window.top !== window) {
         const ancestors = window.location.ancestorOrigins;
-        const topOrigin = ancestors && ancestors.length ? ancestors[ancestors.length - 1] : '';
+        const topOrigin = (ancestors && ancestors.length ? ancestors[ancestors.length - 1] : '') ?? '';
         if (!topOrigin.startsWith('chrome-extension://')) return;
     }
 
@@ -15,7 +15,7 @@
 
     // 1. Override .focus() on all relevant prototypes so script calls are no-ops
     const prototypes = [HTMLElement.prototype, HTMLInputElement.prototype, HTMLTextAreaElement.prototype];
-    const originals = prototypes.map(p => p.focus);
+    const originals = prototypes.map(proto => ({ proto, focus: proto.focus }));
     prototypes.forEach(p => { p.focus = function () {}; });
 
     // 2. Strip autofocus attributes as elements are added to the DOM
@@ -23,8 +23,9 @@
         for (const m of mutations) {
             for (const node of m.addedNodes) {
                 if (node.nodeType === 1) {
-                    if (node.hasAttribute('autofocus')) node.removeAttribute('autofocus');
-                    node.querySelectorAll?.('[autofocus]').forEach(el => el.removeAttribute('autofocus'));
+                    const el = /** @type {Element} */ (node);
+                    if (el.hasAttribute('autofocus')) el.removeAttribute('autofocus');
+                    el.querySelectorAll?.('[autofocus]').forEach(child => child.removeAttribute('autofocus'));
                 }
             }
         }
@@ -34,14 +35,14 @@
     // 3. Once the page has loaded, blur and push focus to the omnibar
     window.addEventListener('load', () => {
         if (document.activeElement && document.activeElement !== document.body) {
-            document.activeElement.blur();
+            /** @type {HTMLElement} */ (document.activeElement).blur();
         }
         window.blur();
     });
 
     // Restore everything after the blocking window
     setTimeout(() => {
-        prototypes.forEach((p, i) => { p.focus = originals[i]; });
+        originals.forEach(({ proto, focus }) => { proto.focus = focus; });
         observer.disconnect();
     }, BLOCK_MS);
 
@@ -50,18 +51,20 @@
     // Escape key does the same for the current page.
     if (window.top !== window) {
         document.addEventListener('click', (e) => {
-            const link = e.target.closest('a[href]');
+            const link = /** @type {HTMLAnchorElement | null} */ (
+                /** @type {Element} */ (e.target).closest('a[href]')
+            );
             if (!link) return;
             if (link.target === '_blank') return; // let popups open normally
             if (!link.href.startsWith('http')) return;
             e.preventDefault();
             e.stopPropagation();
-            window.top.postMessage({ type: 'kagi-navigate', url: link.href }, '*');
+            window.top?.postMessage({ type: 'kagi-navigate', url: link.href }, '*');
         }, true);
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                window.top.postMessage({ type: 'kagi-navigate', url: window.location.href }, '*');
+                window.top?.postMessage({ type: 'kagi-navigate', url: window.location.href }, '*');
             }
         });
     }

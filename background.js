@@ -6,13 +6,55 @@ const ALL_CATEGORIES = [
 
 const ALL_FEEDS = ['blogs', 'appreciated', 'youtube', 'github', 'comics'];
 
+/**
+ * A parsed Atom feed entry.
+ *
+ * @typedef {object} FeedEntry
+ * @property {string} title
+ * @property {string} url
+ * @property {string[]} categories
+ */
+
+/**
+ * One feed's cached entries in chrome.storage.local.
+ *
+ * @typedef {object} FeedSlot
+ * @property {FeedEntry[]} entries
+ * @property {number} fetchedAt
+ */
+
+/**
+ * What the popup and context menu know about the article in a tab.
+ *
+ * @typedef {object} ArticleInfo
+ * @property {string} url
+ * @property {string} [title]
+ * @property {string | null} [source]
+ */
+
+/**
+ * The subset of chrome.storage.sync this worker reads.
+ *
+ * @typedef {object} Settings
+ * @property {boolean} [tabTakeoverEnabled]
+ * @property {boolean} [blockFocusEnabled]
+ * @property {boolean} [smallWebEnabled]
+ * @property {boolean} [bingRedirectEnabled]
+ * @property {string[]} [selectedCategories]
+ * @property {string[]} [selectedFeeds]
+ * @property {string} [customUrl]
+ */
+
 // Single-pass decode so already-escaped sequences like "&amp;lt;" come out
 // as the literal "&lt;" instead of being double-decoded to "<".
+/** @type {Record<string, string>} */
 const XML_NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 
+/** @param {string} s */
 function decodeXmlEntities(s) {
-    return s.replace(/&(amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);/g, (match, body) => {
-        if (body[0] !== '#') return XML_NAMED_ENTITIES[body];
+    return s.replace(/&(amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);/g, (match, /** @type {string} */ body) => {
+        // The regex only matches the five named entities, so the lookup hits.
+        if (body[0] !== '#') return /** @type {string} */ (XML_NAMED_ENTITIES[body]);
         const hex = body[1] === 'x' || body[1] === 'X';
         const code = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
         if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) return match;
@@ -33,6 +75,7 @@ const SMALLWEB_BASE = 'https://kagi.com/smallweb';
 // Feed entries (especially "appreciated") may wrap the real URL as
 // https://kagi.com/smallweb?url=ACTUAL — strip the wrapper so we
 // load the article directly and never show the /smallweb frame.
+/** @param {string} url */
 function unwrapSmallwebUrl(url) {
     try {
         const u = new URL(url);
@@ -48,7 +91,12 @@ function unwrapSmallwebUrl(url) {
 // FEED CACHING
 // ═══════════════════════════════════════
 
+/**
+ * @param {string} xml
+ * @returns {FeedEntry[]}
+ */
 function parseAtomEntries(xml) {
+    /** @type {FeedEntry[]} */
     const entries = [];
     let pos = 0;
     while (true) {
@@ -64,16 +112,17 @@ function parseAtomEntries(xml) {
             || block.match(/href="(https:\/\/[^"]+)"[^>]*rel="alternate"/);
         const href = altHref || block.match(/href="(https:\/\/[^"]+)"/);
         const titleTag = block.match(/<title[^>]*>([^<]+)<\/title>/);
+        /** @type {string[]} */
         const cats = [];
         const catRe = /<category[^>]+term="([^"]+)"/g;
         let catMatch;
-        while ((catMatch = catRe.exec(block))) cats.push(catMatch[1]);
+        while ((catMatch = catRe.exec(block))) cats.push(/** @type {string} */ (catMatch[1]));
         if (href) {
             entries.push({
                 title: decodeXmlEntities(titleTag?.[1] || 'Untitled'),
                 // hrefs are XML attribute values — "&amp;" etc. must be decoded
                 // or URLs with query strings break when fetched.
-                url: unwrapSmallwebUrl(decodeXmlEntities(href[1])),
+                url: unwrapSmallwebUrl(decodeXmlEntities(/** @type {string} */ (href[1]))),
                 categories: cats
             });
         }
@@ -81,21 +130,26 @@ function parseAtomEntries(xml) {
     return entries;
 }
 
+/**
+ * @param {keyof typeof FEED_ENDPOINTS} feedName
+ * @returns {Promise<FeedEntry | null>}
+ */
 async function getRandomFeedEntry(feedName) {
     const CACHE_KEY = 'feedData';
     const THREE_HOURS = 3 * 60 * 60 * 1000;
 
     const stored = await chrome.storage.local.get(CACHE_KEY);
-    const all = stored[CACHE_KEY] || {};
+    const all = /** @type {Record<string, FeedSlot | undefined>} */ (stored[CACHE_KEY] || {});
     const slot = all[feedName];
 
+    /** @type {FeedEntry[]} */
     let entries;
     if (slot && slot.entries.length > 0 && (Date.now() - slot.fetchedAt) < THREE_HOURS) {
         entries = slot.entries;
     } else {
         try {
             const res = await fetch(FEED_ENDPOINTS[feedName]);
-            if (!res.ok) throw new Error(res.status);
+            if (!res.ok) throw new Error(String(res.status));
             entries = parseAtomEntries(await res.text());
             all[feedName] = { entries, fetchedAt: Date.now() };
             await chrome.storage.local.set({ [CACHE_KEY]: all });
@@ -106,6 +160,7 @@ async function getRandomFeedEntry(feedName) {
 
     if (entries.length === 0) return null;
     const entry = entries[Math.floor(Math.random() * entries.length)];
+    if (!entry) return null;
     // Unwrap cached entries that predate the parse-time fix
     entry.url = unwrapSmallwebUrl(entry.url);
     return entry;
@@ -119,6 +174,7 @@ async function getRandomFeedEntry(feedName) {
 // renders a thumbnail card instead — this extracts the video ID for it.
 // The ID is interpolated into thumbnail URLs and inline styles on the NTP
 // page, so only accept real YouTube hosts and URL-safe-base64 IDs.
+/** @param {string} url */
 function youTubeVideoId(url) {
     let id = null;
     try {
@@ -136,11 +192,16 @@ function youTubeVideoId(url) {
 // so each tab gets its own rule — no collisions, no tracking Maps.
 // URLs that look like feeds/XML — skip content script injection so the
 // browser can render them natively (XML tree view or XSLT stylesheet).
+/** @param {string} url */
 function isXmlUrl(url) {
     const path = new URL(url).pathname.toLowerCase();
     return /\.(xml|rss|atom|feed)$/.test(path) || /\/(feed|rss|atom)\/?$/.test(path);
 }
 
+/**
+ * @param {string} url
+ * @param {number} tabId
+ */
 async function prepareIframe(url, tabId) {
     const urlObj = new URL(url);
     const isKagi = urlObj.hostname === 'kagi.com';
@@ -193,6 +254,7 @@ async function prepareIframe(url, tabId) {
     }
 }
 
+/** @param {number} tabId */
 function cleanupTab(tabId) {
     chrome.storage.session.remove('articleUrl_' + tabId);
     chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [tabId] });
@@ -204,6 +266,12 @@ function cleanupTab(tabId) {
 // ARTICLE INFO (session storage — survives SW restarts)
 // ═══════════════════════════════════════
 
+/**
+ * @param {number} tabId
+ * @param {string} url
+ * @param {string} [title]
+ * @param {string | null} [source]
+ */
 async function setArticleInfo(tabId, url, title, source) {
     await chrome.storage.session.set({ ['articleUrl_' + tabId]: { url, title, source } });
     // Show context menu if this is the active tab
@@ -216,8 +284,10 @@ async function setArticleInfo(tabId, url, title, source) {
         const HISTORY_KEY = 'articleHistory';
         const MAX = 100;
         const stored = await chrome.storage.local.get(HISTORY_KEY);
-        const history = stored[HISTORY_KEY] || [];
-        if (history.length === 0 || history[0].url !== url) {
+        const history = /** @type {Array<ArticleInfo & { timestamp: number }>} */ (
+            stored[HISTORY_KEY] || []
+        );
+        if (history.length === 0 || history[0]?.url !== url) {
             history.unshift({ url, title, source, timestamp: Date.now() });
             if (history.length > MAX) history.length = MAX;
             await chrome.storage.local.set({ [HISTORY_KEY]: history });
@@ -225,17 +295,22 @@ async function setArticleInfo(tabId, url, title, source) {
     } catch (e) {}
 }
 
+/**
+ * @param {number} tabId
+ * @returns {Promise<ArticleInfo | null>}
+ */
 async function getArticleInfo(tabId) {
     const stored = await chrome.storage.session.get('articleUrl_' + tabId);
-    return stored['articleUrl_' + tabId] || null;
+    return /** @type {ArticleInfo | null} */ (stored['articleUrl_' + tabId] || null);
 }
 
 // ═══════════════════════════════════════
 // CONTEXT MENU
 // ═══════════════════════════════════════
 
+/** @param {boolean} visible */
 function setContextMenu(visible) {
-    return new Promise(resolve => {
+    return /** @type {Promise<void>} */ (new Promise(resolve => {
         chrome.contextMenus.removeAll(() => {
             if (visible) {
                 chrome.contextMenus.create({ id: 'bookmark-article', title: 'Bookmark this', contexts: ['page', 'frame', 'link'] });
@@ -244,10 +319,14 @@ function setContextMenu(visible) {
             }
             resolve();
         });
-    });
+    }));
 }
 
-// Show/hide context menu based on whether this tab has article info
+/**
+ * Show/hide context menu based on whether this tab has article info
+ *
+ * @param {number} tabId
+ */
 async function updateContextMenuForTab(tabId) {
     const info = await getArticleInfo(tabId);
     await setContextMenu(!!info);
@@ -257,19 +336,26 @@ async function updateContextMenuForTab(tabId) {
 // BOOKMARKS & APPRECIATE
 // ═══════════════════════════════════════
 
+/**
+ * @param {string} parentId
+ * @param {string} name
+ */
 async function getOrCreateFolder(parentId, name) {
     const children = await chrome.bookmarks.getChildren(parentId);
     return children.find(b => b.title === name && !b.url)
         || await chrome.bookmarks.create({ parentId, title: name });
 }
 
+/** @param {string | null} [source] */
 async function getBookmarkFolder(source) {
     const tree = await chrome.bookmarks.getTree();
-    const root = tree[0].children;
+    const root = tree[0]?.children ?? [];
     // Look for existing Small Web folder in preferred order before creating one
     const otherBookmarks = root.find(b => /other bookmarks/i.test(b.title));
     const bookmarksBar = root.find(b => /bookmarks bar/i.test(b.title));
-    const searchOrder = [bookmarksBar, otherBookmarks, root[0]].filter(Boolean);
+    const searchOrder = [bookmarksBar, otherBookmarks, root[0]].filter(
+        /** @returns {b is chrome.bookmarks.BookmarkTreeNode} */ (b) => Boolean(b)
+    );
 
     let swFolder = null;
     for (const parent of searchOrder) {
@@ -279,6 +365,7 @@ async function getBookmarkFolder(source) {
     }
     if (!swFolder) {
         const defaultParent = searchOrder[0];
+        if (!defaultParent) throw new Error('No bookmark root to create the Small Web folder in');
         swFolder = await chrome.bookmarks.create({ parentId: defaultParent.id, title: 'Small Web' });
     }
 
@@ -293,6 +380,7 @@ async function getBookmarkFolder(source) {
     return folder;
 }
 
+/** @param {string} url */
 async function appreciatePost(url) {
     try {
         const formData = new FormData();
@@ -386,6 +474,7 @@ chrome.webNavigation.onCompleted.addListener(async (details) => {
 // ═══════════════════════════════════════
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (tab?.id === undefined) return;
     const article = await getArticleInfo(tab.id);
 
     if (info.menuItemId === 'bookmark-article') {
@@ -402,7 +491,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId === 'add-to-reading-list') {
         const url = info.linkUrl || article?.url || info.frameUrl || info.pageUrl;
         const title = info.selectionText || article?.title || url;
-        try { await chrome.readingList.addEntry({ url, title, hasBeenRead: false }); } catch (e) {}
+        if (url && title) {
+            try { await chrome.readingList.addEntry({ url, title, hasBeenRead: false }); } catch (e) {}
+        }
     }
 
     if (info.menuItemId === 'appreciate-post') {
@@ -416,20 +507,23 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 // ═══════════════════════════════════════
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg.action === 'restoreDefaultNTP' && sender.tab) {
-        chrome.tabs.update(sender.tab.id, { url: 'chrome://new-tab-page' });
+    // Captured once: handlers below run async, after `sender` narrowing is lost.
+    const senderTabId = sender.tab?.id;
+
+    if (msg.action === 'restoreDefaultNTP' && senderTabId !== undefined) {
+        chrome.tabs.update(senderTabId, { url: 'chrome://new-tab-page' });
     }
 
     // Combined: fetch feed entry + prepare iframe + cache article info
-    if (msg.action === 'loadFeedContent' && sender.tab) {
+    if (msg.action === 'loadFeedContent' && senderTabId !== undefined) {
         (async () => {
             try {
                 const entry = await getRandomFeedEntry(msg.feed);
                 if (!entry) { sendResponse({ url: null }); return; }
-                await setArticleInfo(sender.tab.id, entry.url, entry.title, 'feed/' + msg.feed);
+                await setArticleInfo(senderTabId, entry.url, entry.title, 'feed/' + msg.feed);
                 const ytId = youTubeVideoId(entry.url);
                 if (!ytId) {
-                    await prepareIframe(entry.url, sender.tab.id);
+                    await prepareIframe(entry.url, senderTabId);
                 }
                 console.log('[Kagi NTP] source: feed/' + msg.feed + ' | URL:', entry.url);
                 sendResponse({ url: entry.url, title: entry.title, youtube: !!ytId, videoId: ytId });
@@ -441,7 +535,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     // Category from blogs feed (direct article, no Kagi frame)
-    if (msg.action === 'loadCategoryFromFeed' && sender.tab) {
+    if (msg.action === 'loadCategoryFromFeed' && senderTabId !== undefined) {
         (async () => {
             try {
                 const entry = await getRandomFeedEntry('blogs');
@@ -449,18 +543,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 // Filter by category if specified
                 if (msg.category) {
                     const stored = await chrome.storage.local.get('feedData');
-                    const all = stored.feedData?.blogs?.entries || [];
+                    const cached = /** @type {Record<string, FeedSlot | undefined> | undefined} */ (stored.feedData);
+                    const all = cached?.blogs?.entries || [];
                     const filtered = all.filter(e => e.categories && e.categories.includes(msg.category));
                     if (filtered.length === 0) { sendResponse({ url: null }); return; }
                     const pick = filtered[Math.floor(Math.random() * filtered.length)];
+                    if (!pick) { sendResponse({ url: null }); return; }
                     const url = unwrapSmallwebUrl(pick.url);
-                    await setArticleInfo(sender.tab.id, url, pick.title, 'cat/' + msg.category);
-                    await prepareIframe(url, sender.tab.id);
+                    await setArticleInfo(senderTabId, url, pick.title, 'cat/' + msg.category);
+                    await prepareIframe(url, senderTabId);
                     console.log('[Kagi NTP] source: cat/' + msg.category + ' | URL:', url);
                     sendResponse({ url, title: pick.title });
                 } else {
-                    await setArticleInfo(sender.tab.id, entry.url, entry.title, 'feed/blogs');
-                    await prepareIframe(entry.url, sender.tab.id);
+                    await setArticleInfo(senderTabId, entry.url, entry.title, 'feed/blogs');
+                    await prepareIframe(entry.url, senderTabId);
                     console.log('[Kagi NTP] source: feed/blogs (no category) | URL:', entry.url);
                     sendResponse({ url: entry.url, title: entry.title });
                 }
@@ -472,8 +568,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     // Prepare iframe for custom URL
-    if (msg.action === 'prepareIframe' && sender.tab) {
-        prepareIframe(msg.url, sender.tab.id)
+    if (msg.action === 'prepareIframe' && senderTabId !== undefined) {
+        prepareIframe(msg.url, senderTabId)
             .then(() => sendResponse({ ready: true }))
             .catch(() => sendResponse({ ready: false }));
         return true;
@@ -481,7 +577,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     // Popup reads article info
     if (msg.action === 'getArticleInfo') {
-        const tabId = msg.tabId || sender.tab?.id;
+        const tabId = msg.tabId || senderTabId;
         getArticleInfo(tabId).then(info => sendResponse(info));
         return true;
     }
@@ -512,8 +608,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return true;
     }
 
-    if (msg.action === 'searchDefault' && sender.tab) {
-        chrome.search.query({ text: msg.query, tabId: sender.tab.id });
+    if (msg.action === 'searchDefault' && senderTabId !== undefined) {
+        chrome.search.query({ text: msg.query, tabId: senderTabId });
     }
 });
 
@@ -523,6 +619,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 const BING_REDIRECT_RULE_ID = 9999;
 
+/** @param {boolean} enabled */
 async function setBingRedirect(enabled) {
     if (enabled) {
         const extUrl = chrome.runtime.getURL('index.html');
@@ -557,7 +654,7 @@ async function setBingRedirect(enabled) {
 chrome.runtime.onInstalled.addListener(() => {
     chrome.storage.sync.get(
         ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'selectedCategories', 'selectedFeeds', 'customUrl', 'bingRedirectEnabled'],
-        (result) => {
+        (/** @type {Settings} */ result) => {
             const defaults = {};
             if (result.tabTakeoverEnabled === undefined) defaults.tabTakeoverEnabled = true;
             if (result.blockFocusEnabled === undefined) defaults.blockFocusEnabled = true;
@@ -569,21 +666,23 @@ chrome.runtime.onInstalled.addListener(() => {
             setBingRedirect(result.bingRedirectEnabled || false);
         }
     );
-    Object.keys(FEED_ENDPOINTS).forEach(name => getRandomFeedEntry(name));
+    /** @type {Array<keyof typeof FEED_ENDPOINTS>} */ (Object.keys(FEED_ENDPOINTS))
+        .forEach(name => getRandomFeedEntry(name));
 });
 
 chrome.runtime.onStartup.addListener(() => {
-    chrome.storage.sync.get(['selectedFeeds', 'bingRedirectEnabled'], (result) => {
+    chrome.storage.sync.get(['selectedFeeds', 'bingRedirectEnabled'], (/** @type {Settings} */ result) => {
         if (result.selectedFeeds === undefined) {
             chrome.storage.sync.set({ selectedFeeds: ALL_FEEDS });
         }
         setBingRedirect(result.bingRedirectEnabled || false);
     });
-    Object.keys(FEED_ENDPOINTS).forEach(name => getRandomFeedEntry(name));
+    /** @type {Array<keyof typeof FEED_ENDPOINTS>} */ (Object.keys(FEED_ENDPOINTS))
+        .forEach(name => getRandomFeedEntry(name));
 });
 
 // Focus-blocking script for kagi.com (header rules are added per-tab in prepareIframe)
-chrome.storage.sync.get(['blockFocusEnabled'], (result) => {
+chrome.storage.sync.get(['blockFocusEnabled'], (/** @type {Settings} */ result) => {
     if (result.blockFocusEnabled !== false) {
         chrome.scripting.registerContentScripts([{
             id: 'block-focus-kagi',
@@ -601,7 +700,7 @@ chrome.storage.onChanged.addListener((changes) => {
         updateIcon(changes.tabTakeoverEnabled.newValue !== false);
     }
     if (changes.bingRedirectEnabled) {
-        setBingRedirect(changes.bingRedirectEnabled.newValue || false);
+        setBingRedirect(Boolean(changes.bingRedirectEnabled.newValue));
     }
     if (changes.blockFocusEnabled) {
         if (changes.blockFocusEnabled.newValue !== false) {
@@ -619,6 +718,7 @@ chrome.storage.onChanged.addListener((changes) => {
     }
 });
 
+/** @param {boolean} enabled */
 async function updateIcon(enabled) {
     if (enabled) {
         chrome.action.setIcon({
@@ -627,6 +727,7 @@ async function updateIcon(enabled) {
         return;
     }
     const sizes = [16, 48, 128];
+    /** @type {Record<number, ImageData>} */
     const imageData = {};
     for (const size of sizes) {
         const resp = await fetch('icons/icon' + size + '.png');
@@ -634,19 +735,22 @@ async function updateIcon(enabled) {
         const bitmap = await createImageBitmap(blob);
         const canvas = new OffscreenCanvas(size, size);
         const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         ctx.drawImage(bitmap, 0, 0);
         const data = ctx.getImageData(0, 0, size, size);
         const px = data.data;
+        // Indices are always in range — RGBA data length is a multiple of 4.
         for (let i = 0; i < px.length; i += 4) {
-            const gray = Math.round(0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]);
+            const r = px[i] ?? 0, g = px[i + 1] ?? 0, b = px[i + 2] ?? 0;
+            const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
             px[i] = gray; px[i + 1] = gray; px[i + 2] = gray;
-            px[i + 3] = Math.round(px[i + 3] * 0.5);
+            px[i + 3] = Math.round((px[i + 3] ?? 0) * 0.5);
         }
         imageData[size] = data;
     }
     chrome.action.setIcon({ imageData });
 }
 
-chrome.storage.sync.get(['tabTakeoverEnabled'], (result) => {
+chrome.storage.sync.get(['tabTakeoverEnabled'], (/** @type {Settings} */ result) => {
     updateIcon(result.tabTakeoverEnabled !== false);
 });
