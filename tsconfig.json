@@ -1,20 +1,22 @@
 {
   "compilerOptions": {
     // Environment setup & latest features
-    "lib": ["ESNext"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",
-    "jsx": "react-jsx",
     "allowJs": true,
 
+    // This project is plain JavaScript — checkJs is what makes `tsc` more
+    // than a parse pass. Types come from JSDoc comments in the .js files.
+    "checkJs": true,
+
     // TypeScript 7 no longer auto-includes node_modules/@types ("types"
-    // defaults to []), so bun's globals have to be requested explicitly.
-    "types": ["bun"],
+    // defaults to []), so every global package has to be named here.
+    "types": ["bun", "chrome"],
 
     // Bundler mode
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
 

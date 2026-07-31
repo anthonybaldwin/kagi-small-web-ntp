@@ -1,8 +1,24 @@
+/**
+ * The subset of chrome.storage.sync this page reads.
+ *
+ * @typedef {object} Settings
+ * @property {boolean} [tabTakeoverEnabled]
+ * @property {boolean} [blockFocusEnabled]
+ * @property {boolean} [smallWebEnabled]
+ * @property {boolean} [directMode]
+ * @property {string[]} [selectedCategories]
+ * @property {string[]} [selectedFeeds]
+ * @property {string} [customUrl]
+ */
+
 // Handle query params: restore (link click back) or q (Bing redirect)
 const params = new URLSearchParams(window.location.search);
 const restoreUrl = params.get('restore');
 const searchQuery = params.get('q');
-const navType = performance.getEntriesByType('navigation')[0]?.type;
+const navEntry = /** @type {PerformanceNavigationTiming | undefined} */ (
+    performance.getEntriesByType('navigation')[0]
+);
+const navType = navEntry?.type;
 
 if (restoreUrl && /^https?:\/\//.test(restoreUrl)) {
     window.location.replace(restoreUrl);
@@ -27,10 +43,12 @@ if (searchQuery) {
 // Only on normal load/refresh — not back/forward navigations.
 if (!restoreUrl && !searchQuery && navType !== 'back_forward') {
     chrome.tabs.getCurrent().then(tab => {
+        if (!tab) return;
         const key = 'articleUrl_' + tab.id;
         chrome.storage.session.get(key).then(stored => {
-            if (stored[key]?.url) {
-                history.replaceState({ restore: stored[key].url }, '');
+            const entry = /** @type {{ url?: string } | undefined} */ (stored[key]);
+            if (entry?.url) {
+                history.replaceState({ restore: entry.url }, '');
                 history.pushState(null, '');
             }
         });
@@ -40,7 +58,7 @@ if (!restoreUrl && !searchQuery && navType !== 'back_forward') {
 // Load content unless we're restoring via back-button or URL params.
 if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
     ['tabTakeoverEnabled', 'blockFocusEnabled', 'smallWebEnabled', 'directMode', 'selectedCategories', 'selectedFeeds', 'customUrl'],
-    (result) => {
+    (/** @type {Settings} */ result) => {
 
         if (result.tabTakeoverEnabled === false) {
             chrome.runtime.sendMessage({ action: 'restoreDefaultNTP' });
@@ -69,6 +87,7 @@ if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
             }
 
             const pick = options[Math.floor(Math.random() * options.length)];
+            if (!pick) return;
 
             if (pick.type === 'category' && result.directMode) {
                 // Direct mode: load article from feed filtered by category
@@ -98,6 +117,10 @@ if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
 
 // Ask the background to install this tab's header-stripping rule before the
 // iframe request fires. Direct navigation (focus blocking off) needs no rule.
+/**
+ * @param {string} url
+ * @param {boolean} [blockFocusEnabled]
+ */
 function prepareAndLoad(url, blockFocusEnabled) {
     if (blockFocusEnabled !== false) {
         chrome.runtime.sendMessage({ action: 'prepareIframe', url }, () => {
@@ -108,6 +131,11 @@ function prepareAndLoad(url, blockFocusEnabled) {
     }
 }
 
+/**
+ * @param {string} url
+ * @param {string | undefined} title
+ * @param {string} videoId
+ */
 function showYouTubeCard(url, title, videoId) {
     const thumbUrl = 'https://img.youtube.com/vi/' + videoId + '/maxresdefault.jpg';
     document.body.style.cssText = 'margin:0;background:#0f0f10;display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui,sans-serif;overflow:hidden;';
@@ -163,6 +191,10 @@ function showYouTubeCard(url, title, videoId) {
     document.body.appendChild(card);
 }
 
+/**
+ * @param {string} url
+ * @param {boolean} [blockFocusEnabled]
+ */
 function loadUrl(url, blockFocusEnabled) {
     // Mark this history position so forward navigation restores this article.
     history.replaceState({ restore: url }, '');

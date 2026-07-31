@@ -6,12 +6,23 @@ import { createChromeMock } from './chrome-mock.js';
 // We extract the testable functions by reading the source
 // ═══════════════════════════════════════
 
+/**
+ * A parsed Atom feed entry, mirroring background.js.
+ *
+ * @typedef {object} FeedEntry
+ * @property {string} title
+ * @property {string} url
+ * @property {string[]} categories
+ */
+
 // Mirrors background.js — keep in sync when the parser changes.
+/** @type {Record<string, string>} */
 const XML_NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 
+/** @param {string} s */
 function decodeXmlEntities(s) {
-    return s.replace(/&(amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);/g, (match, body) => {
-        if (body[0] !== '#') return XML_NAMED_ENTITIES[body];
+    return s.replace(/&(amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);/g, (match, /** @type {string} */ body) => {
+        if (body[0] !== '#') return /** @type {string} */ (XML_NAMED_ENTITIES[body]);
         const hex = body[1] === 'x' || body[1] === 'X';
         const code = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
         if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) return match;
@@ -19,6 +30,7 @@ function decodeXmlEntities(s) {
     });
 }
 
+/** @param {string} url */
 function unwrapSmallwebUrl(url) {
     try {
         const u = new URL(url);
@@ -30,7 +42,12 @@ function unwrapSmallwebUrl(url) {
     return url;
 }
 
+/**
+ * @param {string} xml
+ * @returns {FeedEntry[]}
+ */
 function parseAtomEntries(xml) {
+    /** @type {FeedEntry[]} */
     const entries = [];
     let pos = 0;
     while (true) {
@@ -45,14 +62,16 @@ function parseAtomEntries(xml) {
             || block.match(/href="(https:\/\/[^"]+)"[^>]*rel="alternate"/);
         const href = altHref || block.match(/href="(https:\/\/[^"]+)"/);
         const titleTag = block.match(/<title[^>]*>([^<]+)<\/title>/);
+        /** @type {string[]} */
+        /** @type {string[]} */
         const cats = [];
         const catRe = /<category[^>]+term="([^"]+)"/g;
         let catMatch;
-        while ((catMatch = catRe.exec(block))) cats.push(catMatch[1]);
+        while ((catMatch = catRe.exec(block))) cats.push(/** @type {string} */ (catMatch[1]));
         if (href) {
             entries.push({
                 title: decodeXmlEntities(titleTag?.[1] || 'Untitled'),
-                url: unwrapSmallwebUrl(decodeXmlEntities(href[1])),
+                url: unwrapSmallwebUrl(decodeXmlEntities(/** @type {string} */ (href[1]))),
                 categories: cats
             });
         }
@@ -86,13 +105,13 @@ describe('parseAtomEntries', () => {
     test('decodes HTML entities in titles', () => {
         const xml = `<entry><title>Tom &amp; Jerry &lt;3</title><link href="https://example.com/tj" /></entry>`;
         const entries = parseAtomEntries(xml);
-        expect(entries[0].title).toBe('Tom & Jerry <3');
+        expect(entries[0]?.title).toBe('Tom & Jerry <3');
     });
 
     test('decodes numeric character references', () => {
         const xml = `<entry><title>Arno&#39;s Blog</title><link href="https://example.com/arno" /></entry>`;
         const entries = parseAtomEntries(xml);
-        expect(entries[0].title).toBe("Arno's Blog");
+        expect(entries[0]?.title).toBe("Arno's Blog");
     });
 
     test('skips entries without https links', () => {
@@ -102,14 +121,14 @@ describe('parseAtomEntries', () => {
             <entry><title>No Link</title></entry>`;
         const entries = parseAtomEntries(xml);
         expect(entries).toHaveLength(1);
-        expect(entries[0].url).toBe('https://good.com');
+        expect(entries[0]?.url).toBe('https://good.com');
     });
 
     test('handles entries with xml:base attributes', () => {
         const xml = `<entry xml:base="https://kagi.com/api"><title>Test</title><link href="https://github.com/repo" /></entry>`;
         const entries = parseAtomEntries(xml);
         expect(entries).toHaveLength(1);
-        expect(entries[0].url).toBe('https://github.com/repo');
+        expect(entries[0]?.url).toBe('https://github.com/repo');
     });
 
     test('returns empty array for non-Atom content', () => {
@@ -120,31 +139,31 @@ describe('parseAtomEntries', () => {
     test('uses Untitled for entries without title', () => {
         const xml = `<entry><link href="https://example.com/no-title" /></entry>`;
         const entries = parseAtomEntries(xml);
-        expect(entries[0].title).toBe('Untitled');
+        expect(entries[0]?.title).toBe('Untitled');
     });
 
     test('decodes hex character references', () => {
         const xml = `<entry><title>It&#x2019;s here</title><link href="https://example.com/x" /></entry>`;
         const entries = parseAtomEntries(xml);
-        expect(entries[0].title).toBe('It’s here');
+        expect(entries[0]?.title).toBe('It’s here');
     });
 
     test('does not double-decode escaped entities', () => {
         const xml = `<entry><title>Literal &amp;lt; sign</title><link href="https://example.com/x" /></entry>`;
         const entries = parseAtomEntries(xml);
-        expect(entries[0].title).toBe('Literal &lt; sign');
+        expect(entries[0]?.title).toBe('Literal &lt; sign');
     });
 
     test('decodes &amp; inside href attributes', () => {
         const xml = `<entry><title>Q</title><link href="https://example.com/page?a=1&amp;b=2" /></entry>`;
         const entries = parseAtomEntries(xml);
-        expect(entries[0].url).toBe('https://example.com/page?a=1&b=2');
+        expect(entries[0]?.url).toBe('https://example.com/page?a=1&b=2');
     });
 
     test('unwraps kagi.com/smallweb?url= wrapper links', () => {
         const xml = `<entry><title>W</title><link href="https://kagi.com/smallweb?url=https%3A%2F%2Fcoolblog.com%2Fpost" /></entry>`;
         const entries = parseAtomEntries(xml);
-        expect(entries[0].url).toBe('https://coolblog.com/post');
+        expect(entries[0]?.url).toBe('https://coolblog.com/post');
     });
 });
 
@@ -152,6 +171,7 @@ describe('parseAtomEntries', () => {
 // YOUTUBE EMBED CONVERSION TESTS
 // ═══════════════════════════════════════
 
+/** @param {string} url */
 function youTubeVideoId(url) {
     let id = null;
     try {
@@ -205,13 +225,17 @@ describe('youTubeVideoId', () => {
 // URL PICKING LOGIC TESTS
 // ═══════════════════════════════════════
 
+/**
+ * @param {string[]} cats
+ * @param {string[]} feeds
+ */
 function pickContent(cats, feeds) {
     const options = [
         ...cats.map(c => ({ type: 'category', value: c })),
         ...feeds.map(f => ({ type: 'feed', value: f }))
     ];
     if (options.length === 0) return { type: 'fallback', value: 'https://kagi.com/smallweb' };
-    return options[Math.floor(Math.random() * options.length)];
+    return /** @type {{ type: string, value: string }} */ (options[Math.floor(Math.random() * options.length)]);
 }
 
 describe('URL picking logic', () => {
@@ -251,11 +275,12 @@ describe('URL picking logic', () => {
 // ═══════════════════════════════════════
 
 describe('prepareIframe rule construction', () => {
+    /** @type {ReturnType<typeof createChromeMock>} */
     let env;
 
     beforeEach(() => {
         env = createChromeMock();
-        globalThis.chrome = env.mock;
+        globalThis.chrome = /** @type {any} */ (env.mock);
     });
 
     test('creates session rule with tabId as rule ID', async () => {
@@ -286,13 +311,13 @@ describe('prepareIframe rule construction', () => {
 
         const rules = await chrome.declarativeNetRequest.getSessionRules();
         expect(rules).toHaveLength(1);
-        expect(rules[0].id).toBe(42);
-        expect(rules[0].condition.tabIds).toEqual([42]);
-        expect(rules[0].condition.urlFilter).toBe('||github.com');
+        expect(rules[0]?.id).toBe(42);
+        expect(rules[0]?.condition.tabIds).toEqual([42]);
+        expect(rules[0]?.condition.urlFilter).toBe('||github.com');
     });
 
     test('two tabs get separate rules', async () => {
-        const addRule = async (url, tabId) => {
+        const addRule = async (/** @type {string} */ url, /** @type {number} */ tabId) => {
             await chrome.declarativeNetRequest.updateSessionRules({
                 removeRuleIds: [tabId],
                 addRules: [{
@@ -309,15 +334,15 @@ describe('prepareIframe rule construction', () => {
 
         const rules = await chrome.declarativeNetRequest.getSessionRules();
         expect(rules).toHaveLength(2);
-        expect(rules.find(r => r.id === 10).condition.urlFilter).toBe('||github.com');
-        expect(rules.find(r => r.id === 11).condition.urlFilter).toBe('||blog.example.com');
+        expect(rules.find(r => r.id === 10)?.condition.urlFilter).toBe('||github.com');
+        expect(rules.find(r => r.id === 11)?.condition.urlFilter).toBe('||blog.example.com');
     });
 
     test('closing a tab only removes that tab rule', async () => {
-        const addRule = async (tabId, host) => {
+        const addRule = async (/** @type {number} */ tabId, /** @type {string} */ host) => {
             await chrome.declarativeNetRequest.updateSessionRules({
                 removeRuleIds: [tabId],
-                addRules: [{ id: tabId, condition: { urlFilter: '||' + host, tabIds: [tabId] }, action: {}, priority: 1 }]
+                addRules: [{ id: tabId, condition: { urlFilter: '||' + host, tabIds: [tabId] }, action: /** @type {any} */ ({}), priority: 1 }]
             });
         };
 
@@ -329,7 +354,7 @@ describe('prepareIframe rule construction', () => {
 
         const rules = await chrome.declarativeNetRequest.getSessionRules();
         expect(rules).toHaveLength(1);
-        expect(rules[0].id).toBe(11);
+        expect(rules[0]?.id).toBe(11);
     });
 
     test('skips rule creation for kagi.com (handled by static rules)', async () => {
@@ -348,11 +373,12 @@ describe('prepareIframe rule construction', () => {
 // ═══════════════════════════════════════
 
 describe('article info via session storage', () => {
+    /** @type {ReturnType<typeof createChromeMock>} */
     let env;
 
     beforeEach(() => {
         env = createChromeMock();
-        globalThis.chrome = env.mock;
+        globalThis.chrome = /** @type {any} */ (env.mock);
     });
 
     test('setArticleInfo stores and getArticleInfo retrieves', async () => {
@@ -377,7 +403,7 @@ describe('article info via session storage', () => {
         await chrome.storage.session.set({ 'articleUrl_42': { url: 'https://example.com', title: 'Test' } });
         // Session storage persists — no need to re-create chrome mock
         const stored = await chrome.storage.session.get('articleUrl_42');
-        expect(stored['articleUrl_42'].url).toBe('https://example.com');
+        expect(/** @type {any} */ (stored['articleUrl_42']).url).toBe('https://example.com');
     });
 });
 
@@ -386,11 +412,12 @@ describe('article info via session storage', () => {
 // ═══════════════════════════════════════
 
 describe('context menu visibility', () => {
+    /** @type {ReturnType<typeof createChromeMock>} */
     let env;
 
     beforeEach(() => {
         env = createChromeMock();
-        globalThis.chrome = env.mock;
+        globalThis.chrome = /** @type {any} */ (env.mock);
     });
 
     test('shows menu when article info exists for active tab', async () => {
@@ -422,11 +449,12 @@ describe('context menu visibility', () => {
 // ═══════════════════════════════════════
 
 describe('cleanup on tab close', () => {
+    /** @type {ReturnType<typeof createChromeMock>} */
     let env;
 
     beforeEach(() => {
         env = createChromeMock();
-        globalThis.chrome = env.mock;
+        globalThis.chrome = /** @type {any} */ (env.mock);
     });
 
     test('removes article info, session rule, and content script', async () => {
@@ -435,7 +463,7 @@ describe('cleanup on tab close', () => {
         // Set up state
         await chrome.storage.session.set({ ['articleUrl_' + tabId]: { url: 'https://example.com', title: 'Test' } });
         await chrome.declarativeNetRequest.updateSessionRules({
-            addRules: [{ id: tabId, condition: {}, action: {}, priority: 1 }]
+            addRules: [{ id: tabId, condition: {}, action: /** @type {any} */ ({}), priority: 1 }]
         });
         await chrome.scripting.registerContentScripts([{ id: 'block-focus-' + tabId, matches: ['https://example.com/*'], js: ['block-focus.js'] }]);
 
@@ -487,6 +515,7 @@ describe('toggle scenarios', () => {
 
     test('Small Web ON, categories only → kagi.com/smallweb?cat=X', () => {
         const cats = ['ai', 'science'];
+        /** @type {string[]} */
         const feeds = [];
         const options = [
             ...cats.map(c => ({ type: 'category', value: c })),
@@ -498,6 +527,7 @@ describe('toggle scenarios', () => {
     });
 
     test('Small Web ON, feeds only → loadFeedContent message', () => {
+        /** @type {string[]} */
         const cats = [];
         const feeds = ['github'];
         const options = [
@@ -516,12 +546,14 @@ describe('toggle scenarios', () => {
             ...feeds.map(f => ({ type: 'feed', value: f }))
         ];
         expect(options).toHaveLength(2);
-        expect(options[0].type).toBe('category');
-        expect(options[1].type).toBe('feed');
+        expect(options[0]?.type).toBe('category');
+        expect(options[1]?.type).toBe('feed');
     });
 
     test('Small Web ON, none selected → fallback', () => {
+        /** @type {string[]} */
         const cats = [];
+        /** @type {string[]} */
         const feeds = [];
         const options = [
             ...cats.map(c => ({ type: 'category', value: c })),
@@ -551,7 +583,7 @@ describe('message handler routing', () => {
 
     test('prepareIframe creates rule for non-kagi URLs', async () => {
         const env = createChromeMock();
-        globalThis.chrome = env.mock;
+        globalThis.chrome = /** @type {any} */ (env.mock);
 
         const url = 'https://blog.example.com/post';
         const tabId = 7;
@@ -571,14 +603,15 @@ describe('message handler routing', () => {
         });
 
         const rules = await chrome.declarativeNetRequest.getSessionRules();
-        expect(rules[0].condition.tabIds).toEqual([7]);
-        expect(rules[0].action.responseHeaders[0].header).toBe('X-Frame-Options');
-        expect(rules[0].action.responseHeaders[1].operation).toBe('set');
+        expect(rules[0]?.condition.tabIds).toEqual([7]);
+        const responseHeaders = /** @type {any[]} */ (rules[0]?.action.responseHeaders);
+        expect(responseHeaders[0].header).toBe('X-Frame-Options');
+        expect(responseHeaders[1].operation).toBe('set');
     });
 
     test('getArticleInfo returns stored info', async () => {
         const env = createChromeMock();
-        globalThis.chrome = env.mock;
+        globalThis.chrome = /** @type {any} */ (env.mock);
 
         await chrome.storage.session.set({ 'articleUrl_5': { url: 'https://a.com', title: 'A' } });
         const stored = await chrome.storage.session.get('articleUrl_5');
@@ -591,11 +624,12 @@ describe('message handler routing', () => {
 // ═══════════════════════════════════════
 
 describe('category article discovery', () => {
+    /** @type {ReturnType<typeof createChromeMock>} */
     let env;
 
     beforeEach(() => {
         env = createChromeMock();
-        globalThis.chrome = env.mock;
+        globalThis.chrome = /** @type {any} */ (env.mock);
     });
 
     test('finds article frame inside kagi.com/smallweb', async () => {
@@ -613,7 +647,7 @@ describe('category article discovery', () => {
         );
 
         expect(articleFrame).toBeTruthy();
-        expect(articleFrame.url).toBe('https://coolblog.com/post');
+        expect(articleFrame?.url).toBe('https://coolblog.com/post');
     });
 
     test('returns null when article has not loaded yet', async () => {
@@ -681,15 +715,21 @@ describe('category article discovery', () => {
 
     test('YouTube card shown only when focus blocking is ON', () => {
         const response = { youtube: true, url: 'https://youtube.com/watch?v=abc' };
-        const blockFocusEnabled = true;
-        const showCard = response.youtube && blockFocusEnabled !== false;
+        // Read off a settings-shaped object like main.js does, rather than a
+        // bare literal the compiler would fold the `!== false` check against.
+        /** @type {{ blockFocusEnabled?: boolean }} */
+        const settings = { blockFocusEnabled: true };
+        const showCard = response.youtube && settings.blockFocusEnabled !== false;
         expect(showCard).toBe(true);
     });
 
     test('YouTube direct navigate when focus blocking is OFF', () => {
         const response = { youtube: true, url: 'https://youtube.com/watch?v=abc' };
-        const blockFocusEnabled = false;
-        const showCard = response.youtube && blockFocusEnabled !== false;
+        // Read off a settings-shaped object like main.js does, rather than a
+        // bare literal the compiler would fold the `!== false` check against.
+        /** @type {{ blockFocusEnabled?: boolean }} */
+        const settings = { blockFocusEnabled: false };
+        const showCard = response.youtube && settings.blockFocusEnabled !== false;
         expect(showCard).toBe(false);
         // Falls through to loadUrl → window.location.replace
     });
@@ -721,7 +761,7 @@ describe('category article discovery', () => {
             'articleUrl_42': { url: 'https://github.com/repo', title: 'Repo', source: 'feed/github' }
         });
         const stored = await chrome.storage.session.get('articleUrl_42');
-        expect(stored['articleUrl_42'].source).toBe('feed/github');
+        expect(/** @type {any} */ (stored['articleUrl_42']).source).toBe('feed/github');
     });
 
     // ═══════════════════════════════════════
@@ -751,6 +791,6 @@ describe('category article discovery', () => {
         }
 
         const final = await chrome.storage.session.get('articleUrl_' + tabId);
-        expect(final['articleUrl_' + tabId].url).toBe('https://first.com');
+        expect(/** @type {any} */ (final['articleUrl_' + tabId]).url).toBe('https://first.com');
     });
 });
