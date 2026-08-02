@@ -70,6 +70,10 @@ When viewing a Small Web article or feed page, three action icons appear in the 
 - The focus-blocking helper script deactivates itself in frames that are not embedded by the extension's new tab page
 - Clicking any link or pressing Escape breaks out of the iframe, restoring full browser functionality
 
+### Kagi Privacy Pass interop
+
+[Kagi Privacy Pass](https://chromewebstore.google.com/detail/kagi-privacy-pass/mendokngpagmkejfpmeellpppjgbpdaj) in "Incognito only" mode can strand fresh kagi.com searches (e.g. the context-menu search on highlighted text) on its internal `redirector.html` page with `ERR_BLOCKED_BY_CLIENT`: it redirects navigations from tabs it hasn't classified yet to a page that is only web-accessible to kagi.com initiators. When a main-frame kagi.com navigation fails that way, this extension retries the same navigation after a short delay (up to 3 times), by which point Privacy Pass has classified the tab. Any `token` query parameter is stripped before retrying, and only `https://kagi.com` / `https://*.kagi.com` targets are ever re-navigated — Privacy Pass's own header rules still apply, so its protections are never bypassed.
+
 ## Fonts
 
 This extension ships with [Pixelify Sans](https://github.com/nicholasglazer/pixelify-sans) (SIL Open Font License), a retro pixel font.

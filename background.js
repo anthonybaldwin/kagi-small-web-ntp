@@ -319,6 +319,7 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
 // Tab closed: clean up everything for that tab
 chrome.tabs.onRemoved.addListener((tabId) => {
     cleanupTab(tabId);
+    rescueAttempts.delete(tabId);
 });
 
 // Top-level navigation: clean up stale state.
@@ -409,6 +410,60 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         const url = info.linkUrl || article?.url || info.frameUrl || info.pageUrl;
         if (url) await appreciatePost(url);
     }
+});
+
+// ═══════════════════════════════════════
+// BLOCKED KAGI SEARCH RESCUE
+// ═══════════════════════════════════════
+
+// Kagi Privacy Pass in "Incognito only" mode redirects kagi.com navigations
+// from tabs it hasn't classified yet to its internal pages/redirector.html.
+// That page is only web-accessible to kagi.com initiators, so fresh searches
+// (context-menu "Search with Kagi", typed URLs) die with ERR_BLOCKED_BY_CLIENT
+// and strand the tab on the redirector URL. Retrying moments later works:
+// by then Privacy Pass has classified the tab and no longer intercepts.
+// We only re-issue the same navigation (minus any session token), so Privacy
+// Pass header rules still apply — this never bypasses its protections.
+
+// Accepts either a kagi.com URL or a redirector-style URL carrying the
+// original kagi.com URL in its fragment. Returns a clean https://kagi.com
+// URL with any session token removed, or null if it's anything else.
+function extractKagiSearchUrl(rawUrl) {
+    try {
+        let u = new URL(rawUrl);
+        // Redirector style: chrome-extension://…/redirector.html#https://kagi.com/…
+        if (u.protocol === 'chrome-extension:') {
+            u = new URL(u.hash.slice(1));
+        }
+        if (u.protocol !== 'https:') return null;
+        if (u.hostname !== 'kagi.com' && !u.hostname.endsWith('.kagi.com')) return null;
+        u.searchParams.delete('token'); // never re-expose a session token in a URL
+        return u.toString();
+    } catch (e) {
+        return null;
+    }
+}
+
+const RESCUE_MAX_ATTEMPTS = 3;
+const rescueAttempts = new Map(); // tabId -> attempts this burst
+
+chrome.webNavigation.onErrorOccurred.addListener((details) => {
+    if (details.frameId !== 0 || details.tabId < 0) return;
+    if (details.error !== 'net::ERR_BLOCKED_BY_CLIENT') return;
+    const target = extractKagiSearchUrl(details.url);
+    if (!target) return;
+    const attempts = rescueAttempts.get(details.tabId) || 0;
+    if (attempts >= RESCUE_MAX_ATTEMPTS) return;
+    rescueAttempts.set(details.tabId, attempts + 1);
+    // Small growing delay gives Privacy Pass time to classify the tab.
+    setTimeout(() => {
+        chrome.tabs.update(details.tabId, { url: target }).catch(() => {});
+    }, 300 + attempts * 300);
+});
+
+// A successful load ends the burst — future blocks in this tab retry fresh.
+chrome.webNavigation.onCompleted.addListener((details) => {
+    if (details.frameId === 0) rescueAttempts.delete(details.tabId);
 });
 
 // ═══════════════════════════════════════

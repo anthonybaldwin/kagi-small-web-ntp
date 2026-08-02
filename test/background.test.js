@@ -202,6 +202,87 @@ describe('youTubeVideoId', () => {
 });
 
 // ═══════════════════════════════════════
+// BLOCKED KAGI SEARCH RESCUE TESTS
+// ═══════════════════════════════════════
+
+// Mirrors background.js — keep in sync when the rescue logic changes.
+function extractKagiSearchUrl(rawUrl) {
+    try {
+        let u = new URL(rawUrl);
+        if (u.protocol === 'chrome-extension:') {
+            u = new URL(u.hash.slice(1));
+        }
+        if (u.protocol !== 'https:') return null;
+        if (u.hostname !== 'kagi.com' && !u.hostname.endsWith('.kagi.com')) return null;
+        u.searchParams.delete('token');
+        return u.toString();
+    } catch (e) {
+        return null;
+    }
+}
+
+describe('extractKagiSearchUrl', () => {
+    test('passes plain kagi search URLs through with query intact', () => {
+        expect(extractKagiSearchUrl('https://kagi.com/search?q=Search+term+goes+here'))
+            .toBe('https://kagi.com/search?q=Search+term+goes+here');
+    });
+
+    test('strips session token from kagi URLs', () => {
+        expect(extractKagiSearchUrl('https://kagi.com/search?q=hello&token=SECRET'))
+            .toBe('https://kagi.com/search?q=hello');
+    });
+
+    test('extracts kagi URL from Privacy Pass redirector fragment', () => {
+        const url = 'chrome-extension://mendokngpagmkejfpmeellpppjgbpdaj/pages/redirector.html#https://kagi.com/search?q=Search+term+goes+here';
+        expect(extractKagiSearchUrl(url)).toBe('https://kagi.com/search?q=Search+term+goes+here');
+    });
+
+    test('strips token when extracting from a redirector fragment', () => {
+        const url = 'chrome-extension://abc/pages/redirector.html#https://kagi.com/search?q=x&token=SECRET';
+        expect(extractKagiSearchUrl(url)).toBe('https://kagi.com/search?q=x');
+    });
+
+    test('accepts kagi.com subdomains', () => {
+        expect(extractKagiSearchUrl('https://translate.kagi.com/?text=hi'))
+            .toBe('https://translate.kagi.com/?text=hi');
+    });
+
+    test('rejects plain-http kagi URLs', () => {
+        expect(extractKagiSearchUrl('http://kagi.com/search?q=x')).toBeNull();
+    });
+
+    test('rejects non-kagi hosts', () => {
+        expect(extractKagiSearchUrl('https://example.com/search?q=x')).toBeNull();
+    });
+
+    test('rejects lookalike hosts', () => {
+        expect(extractKagiSearchUrl('https://kagi.com.evil.com/search?q=x')).toBeNull();
+        expect(extractKagiSearchUrl('https://notkagi.com/search?q=x')).toBeNull();
+    });
+
+    test('rejects extension URLs without a URL fragment', () => {
+        expect(extractKagiSearchUrl('chrome-extension://abc/pages/redirector.html')).toBeNull();
+    });
+
+    test('rejects extension URLs with non-kagi fragments', () => {
+        expect(extractKagiSearchUrl('chrome-extension://abc/x.html#https://evil.com/?q=x')).toBeNull();
+        expect(extractKagiSearchUrl('chrome-extension://abc/x.html#javascript:alert(1)')).toBeNull();
+    });
+
+    test('rejects other schemes and garbage input', () => {
+        expect(extractKagiSearchUrl('javascript:alert(1)')).toBeNull();
+        expect(extractKagiSearchUrl('data:text/html,<b>x</b>')).toBeNull();
+        expect(extractKagiSearchUrl('not a url')).toBeNull();
+        expect(extractKagiSearchUrl('')).toBeNull();
+    });
+
+    test('keeps kagi URL fragments that contain their own hash', () => {
+        const url = 'chrome-extension://abc/pages/redirector.html#https://kagi.com/search?q=x#results';
+        expect(extractKagiSearchUrl(url)).toBe('https://kagi.com/search?q=x#results');
+    });
+});
+
+// ═══════════════════════════════════════
 // URL PICKING LOGIC TESTS
 // ═══════════════════════════════════════
 
