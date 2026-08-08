@@ -143,7 +143,7 @@ function isXmlUrl(url) {
 
 async function prepareIframe(url, tabId) {
     const urlObj = new URL(url);
-    const isKagi = urlObj.hostname === 'kagi.com';
+    const isKagi = urlObj.hostname === 'kagi.com' || urlObj.hostname.endsWith('.kagi.com');
 
     // Always clear any per-tab script left over from a previous article
     // (NTP refresh reuses the tab without a cleanup-triggering navigation).
@@ -175,8 +175,9 @@ async function prepareIframe(url, tabId) {
         }]
     });
 
-    // kagi.com is covered by the statically registered block-focus script;
-    // registering a second copy would double-inject and break focus restore.
+    // kagi.com and its subdomains (e.g. news.kagi.com) are covered by the
+    // statically registered block-focus script; registering a second copy
+    // would double-inject and break focus restore.
     if (isKagi) return;
 
     // Skip content script for XML/RSS — injecting into XML documents
@@ -587,7 +588,7 @@ chrome.storage.sync.get(['blockFocusEnabled'], (result) => {
     if (result.blockFocusEnabled !== false) {
         chrome.scripting.registerContentScripts([{
             id: 'block-focus-kagi',
-            matches: ['https://kagi.com/*'],
+            matches: ['https://kagi.com/*', 'https://*.kagi.com/*'],
             js: ['block-focus.js'],
             runAt: 'document_start',
             world: 'MAIN',
@@ -595,6 +596,10 @@ chrome.storage.sync.get(['blockFocusEnabled'], (result) => {
         }]).catch(() => {}); // already registered
     }
 });
+
+// Clean up the news-tab clicker from prior versions of this extension —
+// we now navigate directly to news.kagi.com/<slug>/latest, no click needed.
+chrome.scripting.unregisterContentScripts({ ids: ['news-tab-click'] }).catch(() => {});
 
 chrome.storage.onChanged.addListener((changes) => {
     if (changes.tabTakeoverEnabled) {
@@ -607,7 +612,7 @@ chrome.storage.onChanged.addListener((changes) => {
         if (changes.blockFocusEnabled.newValue !== false) {
             chrome.scripting.registerContentScripts([{
                 id: 'block-focus-kagi',
-                matches: ['https://kagi.com/*'],
+                matches: ['https://kagi.com/*', 'https://*.kagi.com/*'],
                 js: ['block-focus.js'],
                 runAt: 'document_start',
                 world: 'MAIN',
