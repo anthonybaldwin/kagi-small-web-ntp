@@ -1,6 +1,6 @@
 # Kagi Small Web NTP
 
-A Chrome extension that replaces your new tab page with [Kagi Small Web](https://github.com/kagisearch/smallweb?tab=readme-ov-file#kagi-small-web) or a custom URL (defaults to [Kagi](https://kagi.com)).
+A Chrome extension that replaces your new tab page with [Kagi Small Web](https://github.com/kagisearch/smallweb?tab=readme-ov-file#kagi-small-web), [Kagi News](https://news.kagi.com), or a custom URL (defaults to [Kagi](https://kagi.com)).
 
 <!-- Update images -->
 <!--
@@ -19,11 +19,15 @@ A Chrome extension that replaces your new tab page with [Kagi Small Web](https:/
 
 ## Features
 
-- **New tab override** — opens Kagi Small Web or Kagi every time you open a new tab
-- **Small Web mode** — when enabled, each new tab loads a random article from your selected categories and/or feeds
-- **Category picker** — choose from 22 categories across Tech & Science, Culture & Creative, and Life & World
+- **New tab override** — replaces Chrome's new tab with one of three modes (below)
+- **Small Web mode (Categories & Feeds)** — each new tab loads a random article from your selected categories and/or feeds
+- **Kagi News mode** — each new tab opens the latest [Kagi News](https://news.kagi.com) for a random pick from your selected news categories (World, USA, Business, Technology, Science, Sports, Gaming, On This Day)
+- **Redirect mode** — each new tab opens a custom URL of your choice (defaults to Kagi)
+- **Category picker** — choose from 22 Small Web categories across Tech & Science, Culture & Creative, and Life & World
 - **Feed support** — browse Small Web, Appreciated, Videos (YouTube), Code (GitHub), and Comics feeds from Kagi's public Atom endpoints
 - **Focus blocking** — loads content in a sandboxed iframe to keep focus in the address bar; click any link or press Escape to break out to the real page
+- **History tab** — the last 100 articles you've been shown, grouped by date, with bookmark / reading-list / appreciate actions on every row
+- **Back-button history** — after breaking out of the frame, the browser Back button returns you to the same article (not a new random one)
 - **Bookmark organization** — bookmarks are saved to `Small Web/cat/<category>` or `Small Web/feed/<feed>` subfolders
 - **Reading list** — add articles to Chrome's built-in reading list from the popup or context menu
 - **Appreciate** — send appreciation to Kagi Small Web authors directly from the popup or context menu
@@ -39,16 +43,20 @@ A Chrome extension that replaces your new tab page with [Kagi Small Web](https:/
 
 Click the extension icon in the toolbar to open the settings popup:
 
-1. **Override New Tab page** — master toggle for the extension
-2. **Keep focus in address bar** — loads content in an iframe so you can immediately type a URL; click any link or press Escape to navigate directly to the page
-3. **Open Small Web on New Tab** — when enabled, shows the Categories and Feeds tabs
+1. **Override New Tab** — master toggle for the extension
+2. **Focus in address bar** — loads content in an iframe so you can immediately type a URL; click any link or press Escape to navigate directly to the page
+3. Pick a mode — exactly one of these is active at a time (turning one on turns the others off):
+   - **Categories & Feeds** — Small Web mode; shows the Categories and Feeds tabs
+   - **Kagi News** — shows the news category picker; each new tab opens `news.kagi.com/<category>/latest`
+   - **Redirect to** — shows the custom URL field
 
-### Categories vs Feeds
+### Categories vs Feeds (Small Web mode)
 
 - **Categories** load `kagi.com/smallweb?cat=<category>` which shows a random article from that category through Kagi's interface
-- **Feeds** fetch from Kagi's Atom feed API and load the article directly in an iframe (with header stripping for framing compatibility)
+- **Feeds** fetch from Kagi's Atom feed API (cached for 3 hours) and load the article directly in an iframe (with header stripping for framing compatibility)
+- **Disable Kagi frame** — optional; loads category articles straight from the Small Web feed (filtered by category) instead of through the `kagi.com/smallweb` wrapper
 
-When both are selected, each new tab randomly picks from the combined pool.
+When both categories and feeds are selected, each new tab randomly picks from the combined pool. YouTube videos from the Videos feed render as a thumbnail card with a play button (YouTube embeds don't work from extension pages); clicking play navigates to the real video.
 
 ### Popup Icons
 
@@ -58,9 +66,21 @@ When viewing a Small Web article or feed page, three action icons appear in the 
 - **Star** — bookmark to your Small Web folder (organized by category/feed)
 - **Book** — add to Chrome's reading list
 
+### History
+
+The **History** tab in the popup lists the last 100 articles you've been shown, grouped by date labels (Today, Yesterday, …). Each row has the same star / book / heart actions, and a **Clear** button wipes the list.
+
 ### Keyboard
 
 - **Escape** — break out of the iframe and navigate directly to the page (restores full cookie/auth access)
+
+### Hidden: Bing redirect
+
+An optional toggle redirects Bing/Cortana searches (any `bing.com` URL with a `q=` parameter) to your default search engine. It's hidden by default; to show it, open the popup, inspect it (right-click → Inspect), and in the devtools console run:
+
+```js
+localStorage.setItem('show-redirect-bing', 'true')
+```
 
 ## Security
 
@@ -68,7 +88,22 @@ When viewing a Small Web article or feed page, three action icons appear in the 
 - Header modifications (`X-Frame-Options`/CSP stripping) are session rules scoped to sub-frames of the specific new tab — including for kagi.com — and are cleaned up when you break out of the frame, navigate away, or close the tab; no site's framing protections are weakened for requests made by ordinary web pages
 - Frame break-out messages are only accepted from the framed page's own origin, so nested third-party frames cannot navigate the tab
 - The focus-blocking helper script deactivates itself in frames that are not embedded by the extension's new tab page
+- News category slugs read from synced storage are validated against a known-slug whitelist before being interpolated into URLs
 - Clicking any link or pressing Escape breaks out of the iframe, restoring full browser functionality
+
+## Development
+
+The extension is plain JavaScript (no build step — the folder loads unpacked as-is), typed via JSDoc comments and checked with TypeScript 7's `checkJs`. [Bun](https://bun.sh) runs the tests.
+
+```sh
+bun install          # install dev dependencies
+bun test             # run the test suite (test/)
+bun run typecheck    # tsc --noEmit over the JSDoc-typed sources
+```
+
+CI (GitHub Actions) runs the typecheck and tests on every push to `main` and every pull request. Dependabot keeps npm dev dependencies and GitHub Actions up to date weekly.
+
+See [`docs/architecture.md`](docs/architecture.md) for how the pieces fit together and [`docs/settings.md`](docs/settings.md) for every storage key and hidden setting. Guidance for AI coding agents lives in [`CLAUDE.md`](CLAUDE.md).
 
 ## Fonts
 
@@ -95,6 +130,6 @@ Static font files should be named `{prefix}-{Weight}.ttf` (e.g. `Lufga-Regular.t
 
 ## Attributions & Trademarks
 
-- **Kagi** — This extension uses the [Kagi Small Web](https://kagi.com/smallweb) API. Kagi logos, Small Web badges, and the "Use Kagi" GIF (`icons/`) are property of [Kagi Inc.](https://kagi.com) This extension is not affiliated with or endorsed by Kagi Inc.
+- **Kagi** — This extension uses the [Kagi Small Web](https://kagi.com/smallweb) API and links to [Kagi News](https://news.kagi.com). Kagi logos, Small Web badges, and the "Use Kagi" GIF (`icons/`) are property of [Kagi Inc.](https://kagi.com) This extension is not affiliated with or endorsed by Kagi Inc.
 - **Microsoft** — "Bing" and "Cortana" are trademarks of Microsoft Corporation. This extension is not affiliated with or endorsed by Microsoft.
 - **Pixelify Sans** — bundled font licensed under the [SIL Open Font License 1.1](fonts/OFL.txt). See [nicholasglazer/pixelify-sans](https://github.com/nicholasglazer/pixelify-sans).
