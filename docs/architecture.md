@@ -26,13 +26,13 @@ How the extension's pieces fit together. The extension is plain JavaScript with 
 ## New tab flow
 
 1. `main.js` handles special query params first: `?restore=` (back-navigation to a previous article), `?q=` (Bing redirect → `chrome.search.query` against the default engine).
-2. Otherwise it reads settings from `chrome.storage.sync` and picks a mode:
-   - **Small Web mode** (`smallWebEnabled`): builds a pool from `selectedCategories` + `selectedFeeds` and picks one at random.
+2. Otherwise it reads settings from `chrome.storage.sync` and builds one random pool (`buildPool`) from every enabled mode, then picks one entry:
+   - **Small Web mode** (`smallWebEnabled`): contributes one entry per `selectedCategories` + `selectedFeeds` value (or a single "random Small Web" entry when both are empty).
      - *Category, default:* loads `kagi.com/smallweb?cat=<category>` (Kagi's own random-article frame).
      - *Category, direct mode* (`directMode`): asks the worker for a random entry from the cached Small Web feed filtered by that category, skipping the Kagi wrapper.
      - *Feed:* asks the worker for a random entry from that feed's cache (`loadFeedContent`). YouTube entries render as a local thumbnail card (embeds are blocked from `chrome-extension://` origins) — the video ID is whitelist-validated before it's interpolated anywhere.
-   - **Kagi News mode** (`kagiNewsEnabled`): picks a random slug from `kagiNewsCategories`, validated against a hardcoded whitelist (synced storage may hold values written by other extension versions), and loads `https://news.kagi.com/<slug>/latest`.
-   - **Custom URL** (fallback / `redirectToEnabled`): loads `customUrl`, defaulting to `https://kagi.com`.
+   - **Kagi News mode** (`kagiNewsEnabled`): contributes one entry per slug in `kagiNewsCategories`, validated against a hardcoded whitelist (synced storage may hold values written by other extension versions). A news pick loads `https://news.kagi.com/<slug>/latest`.
+   - **Custom URL** (`redirectToEnabled`, i.e. the pool is empty): loads `customUrl`, defaulting to `https://kagi.com`.
 3. With focus blocking on, the page is embedded in `<iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox">`. The sandbox deliberately omits `allow-top-navigation` — breakout only happens through the extension's own message handler.
 
 ## Iframe preparation and header stripping

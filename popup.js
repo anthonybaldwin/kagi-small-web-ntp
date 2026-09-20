@@ -551,8 +551,9 @@ function updateSections() {
     urlSection.classList.toggle('visible', takeoverOn && redirectOn);
 }
 
-// Exactly one of {smallWeb, kagiNews, redirectTo} is on while takeover is on.
-// If none are on after a toggle change, redirect-to is the safe default.
+// Small Web and Kagi News can be on together (their selections pool into one
+// random draw); redirect-to is exclusive with both. If none are on after a
+// toggle change, redirect-to is the safe default.
 function ensureContentMode() {
     if (toggle.checked || kagiNewsToggle.checked || redirectToToggle.checked) return;
     redirectToToggle.checked = true;
@@ -581,10 +582,6 @@ blockFocusToggle.addEventListener('change', () => {
 toggle.addEventListener('change', () => {
     chrome.storage.sync.set({ smallWebEnabled: toggle.checked });
     if (toggle.checked) {
-        if (kagiNewsToggle.checked) {
-            kagiNewsToggle.checked = false;
-            chrome.storage.sync.set({ kagiNewsEnabled: false });
-        }
         if (redirectToToggle.checked) {
             redirectToToggle.checked = false;
             chrome.storage.sync.set({ redirectToEnabled: false });
@@ -612,10 +609,6 @@ bingRedirectToggle.addEventListener('change', () => {
 kagiNewsToggle.addEventListener('change', () => {
     chrome.storage.sync.set({ kagiNewsEnabled: kagiNewsToggle.checked });
     if (kagiNewsToggle.checked) {
-        if (toggle.checked) {
-            toggle.checked = false;
-            chrome.storage.sync.set({ smallWebEnabled: false });
-        }
         if (redirectToToggle.checked) {
             redirectToToggle.checked = false;
             chrome.storage.sync.set({ redirectToEnabled: false });
