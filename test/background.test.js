@@ -565,6 +565,82 @@ describe('toggle scenarios', () => {
 });
 
 // ═══════════════════════════════════════
+// CONTENT POOL TESTS (mirrors buildPool in main.js)
+// ═══════════════════════════════════════
+
+const NEWS_SLUGS = new Set(['world', 'usa', 'business', 'tech', 'science', 'sports', 'gaming', 'onthisday']);
+
+/**
+ * @typedef {{ type: 'category' | 'feed' | 'news' | 'smallweb', value: string }} PoolOption
+ * @param {{ smallWebEnabled?: boolean, kagiNewsEnabled?: boolean, selectedCategories?: string[], selectedFeeds?: string[], kagiNewsCategories?: string[] }} result
+ * @returns {PoolOption[]}
+ */
+function buildPool(result) {
+    /** @type {PoolOption[]} */
+    const pool = [];
+    if (result.smallWebEnabled) {
+        const cats = result.selectedCategories || [];
+        const feeds = result.selectedFeeds || [];
+        for (const c of cats) pool.push({ type: 'category', value: c });
+        for (const f of feeds) pool.push({ type: 'feed', value: f });
+        if (cats.length === 0 && feeds.length === 0) pool.push({ type: 'smallweb', value: '' });
+    }
+    if (result.kagiNewsEnabled) {
+        const stored = Array.isArray(result.kagiNewsCategories) ? result.kagiNewsCategories : [];
+        const slugs = stored.filter(s => NEWS_SLUGS.has(s));
+        if (slugs.length === 0) slugs.push('world');
+        for (const s of slugs) pool.push({ type: 'news', value: s });
+    }
+    return pool;
+}
+
+describe('buildPool', () => {
+    test('neither mode on → empty pool (custom URL path)', () => {
+        expect(buildPool({ selectedCategories: ['ai'], kagiNewsCategories: ['world'] })).toEqual([]);
+    });
+
+    test('Small Web only → categories + feeds', () => {
+        const pool = buildPool({ smallWebEnabled: true, selectedCategories: ['ai'], selectedFeeds: ['github'], kagiNewsCategories: ['world'] });
+        expect(pool).toEqual([
+            { type: 'category', value: 'ai' },
+            { type: 'feed', value: 'github' }
+        ]);
+    });
+
+    test('Kagi News only → one entry per selected slug', () => {
+        const pool = buildPool({ kagiNewsEnabled: true, selectedCategories: ['ai'], kagiNewsCategories: ['world', 'tech'] });
+        expect(pool).toEqual([
+            { type: 'news', value: 'world' },
+            { type: 'news', value: 'tech' }
+        ]);
+    });
+
+    test('both modes on → categories, feeds, and news pool together', () => {
+        const pool = buildPool({
+            smallWebEnabled: true, kagiNewsEnabled: true,
+            selectedCategories: ['ai'], selectedFeeds: ['github'], kagiNewsCategories: ['world']
+        });
+        expect(pool.map(p => p.type)).toEqual(['category', 'feed', 'news']);
+    });
+
+    test('Small Web on with nothing selected → single random-Small-Web entry', () => {
+        expect(buildPool({ smallWebEnabled: true, selectedCategories: [], selectedFeeds: [] }))
+            .toEqual([{ type: 'smallweb', value: '' }]);
+        const both = buildPool({ smallWebEnabled: true, kagiNewsEnabled: true, kagiNewsCategories: ['usa'] });
+        expect(both).toEqual([{ type: 'smallweb', value: '' }, { type: 'news', value: 'usa' }]);
+    });
+
+    test('unknown news slugs are dropped; empty falls back to world', () => {
+        expect(buildPool({ kagiNewsEnabled: true, kagiNewsCategories: ['tech', '../evil', 'x'] }))
+            .toEqual([{ type: 'news', value: 'tech' }]);
+        expect(buildPool({ kagiNewsEnabled: true, kagiNewsCategories: ['../evil'] }))
+            .toEqual([{ type: 'news', value: 'world' }]);
+        expect(buildPool({ kagiNewsEnabled: true, kagiNewsCategories: /** @type {any} */ ('world') }))
+            .toEqual([{ type: 'news', value: 'world' }]);
+    });
+});
+
+// ═══════════════════════════════════════
 // MESSAGE HANDLER TESTS
 // ═══════════════════════════════════════
 

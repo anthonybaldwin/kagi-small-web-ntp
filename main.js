@@ -68,64 +68,82 @@ if (!restoreUrl && !searchQuery && !backRestore) chrome.storage.sync.get(
         }
         document.body.style.display = '';
 
-        if (result.smallWebEnabled) {
-            const cats = result.selectedCategories || [];
-            const feeds = result.selectedFeeds || [];
-            const options = [
-                ...cats.map(c => ({ type: 'category', value: c })),
-                ...feeds.map(f => ({ type: 'feed', value: f }))
-            ];
+        const pool = buildPool(result);
+        if (pool.length === 0) {
+            prepareAndLoad(result.customUrl || 'https://kagi.com', result.blockFocusEnabled);
+            return;
+        }
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        if (!pick) return;
 
-            if (options.length === 0) {
-                if (result.directMode) {
-                    chrome.runtime.sendMessage({ action: 'loadCategoryFromFeed' }, (response) => {
-                        if (response?.url) loadUrl(response.url, result.blockFocusEnabled);
-                        else prepareAndLoad('https://kagi.com/smallweb', result.blockFocusEnabled);
-                    });
+        if (pick.type === 'news') {
+            prepareAndLoad('https://news.kagi.com/' + pick.value + '/latest', result.blockFocusEnabled);
+        } else if (pick.type === 'smallweb') {
+            if (result.directMode) {
+                chrome.runtime.sendMessage({ action: 'loadCategoryFromFeed' }, (response) => {
+                    if (response?.url) loadUrl(response.url, result.blockFocusEnabled);
+                    else prepareAndLoad('https://kagi.com/smallweb', result.blockFocusEnabled);
+                });
+            } else {
+                prepareAndLoad('https://kagi.com/smallweb', result.blockFocusEnabled);
+            }
+        } else if (pick.type === 'category' && result.directMode) {
+            // Direct mode: load article from feed filtered by category
+            chrome.runtime.sendMessage({ action: 'loadCategoryFromFeed', category: pick.value }, (response) => {
+                if (response?.url) loadUrl(response.url, result.blockFocusEnabled);
+                else prepareAndLoad('https://kagi.com/smallweb?cat=' + pick.value, result.blockFocusEnabled);
+            });
+        } else if (pick.type === 'category') {
+            prepareAndLoad('https://kagi.com/smallweb?cat=' + pick.value, result.blockFocusEnabled);
+        } else {
+            // One message: fetch entry + prepare iframe + cache article info
+            chrome.runtime.sendMessage({ action: 'loadFeedContent', feed: pick.value }, (response) => {
+                if (response?.youtube && result.blockFocusEnabled !== false) {
+                    showYouTubeCard(response.url, response.title, response.videoId);
+                } else if (response?.url) {
+                    loadUrl(response.url, result.blockFocusEnabled);
                 } else {
                     prepareAndLoad('https://kagi.com/smallweb', result.blockFocusEnabled);
                 }
-                return;
-            }
-
-            const pick = options[Math.floor(Math.random() * options.length)];
-            if (!pick) return;
-
-            if (pick.type === 'category' && result.directMode) {
-                // Direct mode: load article from feed filtered by category
-                chrome.runtime.sendMessage({ action: 'loadCategoryFromFeed', category: pick.value }, (response) => {
-                    if (response?.url) loadUrl(response.url, result.blockFocusEnabled);
-                    else prepareAndLoad('https://kagi.com/smallweb?cat=' + pick.value, result.blockFocusEnabled);
-                });
-            } else if (pick.type === 'category') {
-                prepareAndLoad('https://kagi.com/smallweb?cat=' + pick.value, result.blockFocusEnabled);
-            } else {
-                // One message: fetch entry + prepare iframe + cache article info
-                chrome.runtime.sendMessage({ action: 'loadFeedContent', feed: pick.value }, (response) => {
-                    if (response?.youtube && result.blockFocusEnabled !== false) {
-                        showYouTubeCard(response.url, response.title, response.videoId);
-                    } else if (response?.url) {
-                        loadUrl(response.url, result.blockFocusEnabled);
-                    } else {
-                        prepareAndLoad('https://kagi.com/smallweb', result.blockFocusEnabled);
-                    }
-                });
-            }
-        } else if (result.kagiNewsEnabled) {
-            // Slugs are interpolated into the news URL, so only accept known
-            // ones — synced storage may hold values written by other versions.
-            // Keep in sync with NEWS_CATEGORIES in popup.js.
-            const NEWS_SLUGS = new Set(['world', 'usa', 'business', 'tech', 'science', 'sports', 'gaming', 'onthisday']);
-            const stored = Array.isArray(result.kagiNewsCategories) ? result.kagiNewsCategories : [];
-            const cats = stored.filter(s => NEWS_SLUGS.has(s));
-            if (cats.length === 0) cats.push('world');
-            const slug = cats[Math.floor(Math.random() * cats.length)];
-            prepareAndLoad('https://news.kagi.com/' + slug + '/latest', result.blockFocusEnabled);
-        } else {
-            prepareAndLoad(result.customUrl || 'https://kagi.com', result.blockFocusEnabled);
+            });
         }
     }
 );
+
+// Slugs are interpolated into the news URL, so only accept known ones —
+// synced storage may hold values written by other versions.
+// Keep in sync with NEWS_CATEGORIES in popup.js.
+const NEWS_SLUGS = new Set(['world', 'usa', 'business', 'tech', 'science', 'sports', 'gaming', 'onthisday']);
+
+/**
+ * One pool entry per selected Small Web category, feed, and news category
+ * across every enabled mode; each new tab draws one at random. Small Web
+ * with nothing selected contributes a single "random Small Web" entry so
+ * the toggle still means something. Empty pool means neither mode is on.
+ * Mirrored in test/background.test.js — keep both in sync.
+ *
+ * @typedef {{ type: 'category' | 'feed' | 'news' | 'smallweb', value: string }} PoolOption
+ * @param {Settings} result
+ * @returns {PoolOption[]}
+ */
+function buildPool(result) {
+    /** @type {PoolOption[]} */
+    const pool = [];
+    if (result.smallWebEnabled) {
+        const cats = result.selectedCategories || [];
+        const feeds = result.selectedFeeds || [];
+        for (const c of cats) pool.push({ type: 'category', value: c });
+        for (const f of feeds) pool.push({ type: 'feed', value: f });
+        if (cats.length === 0 && feeds.length === 0) pool.push({ type: 'smallweb', value: '' });
+    }
+    if (result.kagiNewsEnabled) {
+        const stored = Array.isArray(result.kagiNewsCategories) ? result.kagiNewsCategories : [];
+        const slugs = stored.filter(s => NEWS_SLUGS.has(s));
+        if (slugs.length === 0) slugs.push('world');
+        for (const s of slugs) pool.push({ type: 'news', value: s });
+    }
+    return pool;
+}
 
 // Ask the background to install this tab's header-stripping rule before the
 // iframe request fires. Direct navigation (focus blocking off) needs no rule.

@@ -8,9 +8,9 @@ Every setting the extension stores, where it lives, and what reads it.
 |---|---|---|---|
 | `tabTakeoverEnabled` | boolean | `true` | Master switch. Off = new tabs go to Chrome's default NTP (and the toolbar icon grays out). |
 | `blockFocusEnabled` | boolean | `true` | Focus blocking: load content in a sandboxed iframe so the address bar keeps focus. Off = navigate the tab directly. |
-| `smallWebEnabled` | boolean | `false` | Small Web mode (Categories & Feeds). Mutually exclusive with `kagiNewsEnabled` and `redirectToEnabled`. |
-| `kagiNewsEnabled` | boolean | `false` | Kagi News mode: new tabs open `news.kagi.com/<slug>/latest`. Mutually exclusive with the other two modes. |
-| `redirectToEnabled` | boolean | `false` | Redirect mode: new tabs open `customUrl`. Mutually exclusive with the other two modes. |
+| `smallWebEnabled` | boolean | `false` | Small Web mode (Categories & Feeds): adds selected categories and feeds to the new-tab pool. Can be on together with `kagiNewsEnabled`; mutually exclusive with `redirectToEnabled`. |
+| `kagiNewsEnabled` | boolean | `false` | Kagi News mode: adds selected news categories to the new-tab pool; a news pick opens `news.kagi.com/<slug>/latest`. Can be on together with `smallWebEnabled`; mutually exclusive with `redirectToEnabled`. |
+| `redirectToEnabled` | boolean | `false` | Redirect mode: new tabs open `customUrl`. Mutually exclusive with both other modes. |
 | `directMode` | boolean | `false` | "Disable Kagi frame": load category articles straight from the Small Web feed (filtered by category) instead of the `kagi.com/smallweb` wrapper. Only meaningful in Small Web mode. |
 | `selectedCategories` | string[] | all 22 | Small Web categories in the random pool (`ai`, `science`, `programming`, `diy`, `tech`, `hardware`, `infra`, `web`, `health`, `art`, `essays`, `humanities`, `retro`, `photography`, `culture`, `gaming`, `society`, `life`, `food`, `travel`, `politics`, `economy`). |
 | `selectedFeeds` | string[] | all 5 | Feeds in the random pool: `blogs`, `appreciated`, `youtube`, `github`, `comics`. |
@@ -18,7 +18,7 @@ Every setting the extension stores, where it lives, and what reads it.
 | `customUrl` | string | `''` (→ `https://kagi.com`) | URL opened in Redirect mode. The popup auto-prefixes `https://` on blur. |
 | `bingRedirectEnabled` | boolean | `false` | Redirect Bing/Cortana searches to the default search engine (see hidden settings below). |
 
-The popup enforces that exactly one of `smallWebEnabled` / `kagiNewsEnabled` / `redirectToEnabled` is on while the master toggle is on.
+The popup enforces that at least one of `smallWebEnabled` / `kagiNewsEnabled` / `redirectToEnabled` is on while the master toggle is on, and that `redirectToEnabled` is never on together with either of the other two. When Small Web and Kagi News are both on, `main.js` pools their selections into one random draw.
 
 ## `chrome.storage.local` (this machine only)
 

@@ -43,7 +43,8 @@ These are duplicated across files on purpose (the extension has no shared-module
 
 - **News slugs:** `NEWS_SLUGS` in `main.js` must match `NEWS_CATEGORIES` in `popup.js`. Slugs are interpolated into `https://news.kagi.com/<slug>/latest`, so `main.js` whitelists them — never trust slugs read from synced storage.
 - **Parser helpers:** `decodeXmlEntities`, `unwrapSmallwebUrl`, and `parseAtomEntries` in `test/background.test.js` mirror `background.js`. Update both when the parser changes.
-- **Mode exclusivity:** exactly one of `smallWebEnabled` / `kagiNewsEnabled` / `redirectToEnabled` is on while `tabTakeoverEnabled` is on. `popup.js` enforces this; `main.js` checks `smallWebEnabled` first, then `kagiNewsEnabled`, then falls through to the custom URL.
+- **Mode rules:** at least one of `smallWebEnabled` / `kagiNewsEnabled` / `redirectToEnabled` is on while `tabTakeoverEnabled` is on, and `redirectToEnabled` is exclusive with the other two (Small Web and Kagi News may be on together). `popup.js` enforces this; `main.js` pools every enabled mode's selections via `buildPool` and falls through to the custom URL when the pool is empty.
+- **Pool builder:** `buildPool` in `test/background.test.js` mirrors `main.js`. Update both when the pool logic changes.
 
 ## Security rules (do not weaken)
 

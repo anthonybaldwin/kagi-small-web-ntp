@@ -1,6 +1,6 @@
 # Kagi Small Web NTP
 
-A Chrome extension that replaces your new tab page with [Kagi Small Web](https://github.com/kagisearch/smallweb?tab=readme-ov-file#kagi-small-web), [Kagi News](https://news.kagi.com), or a custom URL (defaults to [Kagi](https://kagi.com)).
+A Chrome extension that replaces your new tab page with [Kagi Small Web](https://github.com/kagisearch/smallweb?tab=readme-ov-file#kagi-small-web), [Kagi News](https://news.kagi.com) (or both, pooled), or a custom URL (defaults to [Kagi](https://kagi.com)).
 
 <!-- Update images -->
 <!--
@@ -19,9 +19,10 @@ A Chrome extension that replaces your new tab page with [Kagi Small Web](https:/
 
 ## Features
 
-- **New tab override** — replaces Chrome's new tab with one of three modes (below)
+- **New tab override** — replaces Chrome's new tab with Small Web articles, Kagi News, or a custom URL (below)
 - **Small Web mode (Categories & Feeds)** — each new tab loads a random article from your selected categories and/or feeds
 - **Kagi News mode** — each new tab opens the latest [Kagi News](https://news.kagi.com) for a random pick from your selected news categories (World, USA, Business, Technology, Science, Sports, Gaming, On This Day)
+- **Pooled modes** — Small Web and Kagi News can be on together; every selected category, feed, and news category goes into one random pool
 - **Redirect mode** — each new tab opens a custom URL of your choice (defaults to Kagi)
 - **Category picker** — choose from 22 Small Web categories across Tech & Science, Culture & Creative, and Life & World
 - **Feed support** — browse Small Web, Appreciated, Videos (YouTube), Code (GitHub), and Comics feeds from Kagi's public Atom endpoints
@@ -45,10 +46,12 @@ Click the extension icon in the toolbar to open the settings popup:
 
 1. **Override New Tab** — master toggle for the extension
 2. **Focus in address bar** — loads content in an iframe so you can immediately type a URL; click any link or press Escape to navigate directly to the page
-3. Pick a mode — exactly one of these is active at a time (turning one on turns the others off):
+3. Pick what new tabs open:
    - **Categories & Feeds** — Small Web mode; shows the Categories and Feeds tabs
    - **Kagi News** — shows the news category picker; each new tab opens `news.kagi.com/<category>/latest`
    - **Redirect to** — shows the custom URL field
+
+   Categories & Feeds and Kagi News can both be on: each new tab draws one entry at random from every selected Small Web category, feed, and news category combined. Redirect to is exclusive — turning it on turns the other two off, and vice versa.
 
 ### Categories vs Feeds (Small Web mode)
 
