@@ -244,13 +244,17 @@ async function prepareIframe(url, tabId) {
     // Skip content script for XML/RSS — injecting into XML documents
     // destroys the browser's native XML tree view and XSLT rendering.
     if (!isXmlUrl(url)) {
+        // persistAcrossSessions: false — registrations default to surviving a
+        // browser restart, but the tab they were made for doesn't, and
+        // onRemoved never fires for tabs closed by quitting the browser.
         await chrome.scripting.registerContentScripts([{
             id: scriptId,
             matches: [urlObj.origin + '/*'],
             js: ['block-focus.js'],
             runAt: 'document_start',
             world: 'MAIN',
-            allFrames: true
+            allFrames: true,
+            persistAcrossSessions: false
         }]);
     }
 }
@@ -681,6 +685,17 @@ chrome.runtime.onStartup.addListener(() => {
     /** @type {Array<keyof typeof FEED_ENDPOINTS>} */ (Object.keys(FEED_ENDPOINTS))
         .forEach(name => getRandomFeedEntry(name));
 });
+
+// Sweep per-tab focus scripts whose tab is gone. Older versions registered
+// them persistently, so a leaked one kept matching its origin in every tab
+// across restarts.
+chrome.scripting.getRegisteredContentScripts().then(async (scripts) => {
+    const tabIds = new Set((await chrome.tabs.query({})).map(t => t.id));
+    const stale = scripts
+        .map(s => s.id)
+        .filter(id => /^block-focus-\d+$/.test(id) && !tabIds.has(Number(id.slice('block-focus-'.length))));
+    if (stale.length) await chrome.scripting.unregisterContentScripts({ ids: stale });
+}).catch(() => {});
 
 // Focus-blocking script for kagi.com (header rules are added per-tab in prepareIframe)
 chrome.storage.sync.get(['blockFocusEnabled'], (/** @type {Settings} */ result) => {
