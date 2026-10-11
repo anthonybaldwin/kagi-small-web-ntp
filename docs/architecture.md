@@ -20,7 +20,7 @@ How the extension's pieces fit together. The extension is plain JavaScript with 
 - **`background.js`** — the MV3 service worker. Owns everything stateful: feed fetching and caching, Atom parsing, per-tab declarativeNetRequest rules, article info/history, bookmarks, reading list, appreciate, context menus, and the Bing redirect rule.
 - **`main.js`** — the new tab page script. Reads settings, decides what to load, and either embeds it in a sandboxed iframe (focus blocking on) or navigates directly (focus blocking off).
 - **`popup.js` / `popup.html`** — the toolbar popup. All settings UI plus the Categories / Feeds / History tabs and the per-article action icons (appreciate, bookmark, reading list).
-- **`block-focus.js`** — a content script injected at `document_start` into the MAIN world of framed pages (and kagi.com statically). Blocks focus stealing for 2 seconds, strips `autofocus`, and relays link clicks / Escape presses to the NTP page for frame breakout.
+- **`block-focus.js`** — a content script injected at `document_start` into the MAIN world of framed pages (and kagi.com statically). Blocks focus stealing for 2 seconds, strips `autofocus`, and relays link clicks / Escape presses to the NTP page for frame breakout. Registered scripts match by origin in every tab, so it exits immediately in top-level documents and in frames not embedded by the NTP — visiting the same site normally is never affected.
 - **`load-fonts.js`** — builds `@font-face` rules from `fonts/font.config.json` (variable and static fonts).
 
 ## New tab flow
@@ -43,7 +43,7 @@ Most sites send `X-Frame-Options` / CSP headers that block framing. Before the i
 - matches only `sub_frame` resources of that one tab for the article's hostname,
 - removes `X-Frame-Options` and replaces CSP (kagi.com gets a stricter replacement than third-party articles).
 
-It also registers a per-tab `block-focus.js` content script for the article's origin (skipped for kagi.com, which is covered by a static registration, and for XML/RSS URLs, where injection would destroy the browser's native XML rendering).
+It also registers a per-tab `block-focus.js` content script for the article's origin (skipped for kagi.com, which is covered by a static registration, and for XML/RSS URLs, where injection would destroy the browser's native XML rendering). These registrations use `persistAcrossSessions: false`, and the service worker sweeps any `block-focus-<tabId>` whose tab no longer exists on startup — `onRemoved` doesn't fire for tabs closed by quitting the browser.
 
 Everything is cleaned up (`cleanupTab`) when the tab closes, navigates away, or breaks out of the frame — so no site's framing protections are weakened for ordinary browsing.
 

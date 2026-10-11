@@ -90,7 +90,7 @@ localStorage.setItem('show-redirect-bing', 'true')
 - Feed pages are loaded in sandboxed iframes that cannot navigate your browser on their own
 - Header modifications (`X-Frame-Options`/CSP stripping) are session rules scoped to sub-frames of the specific new tab — including for kagi.com — and are cleaned up when you break out of the frame, navigate away, or close the tab; no site's framing protections are weakened for requests made by ordinary web pages
 - Frame break-out messages are only accepted from the framed page's own origin, so nested third-party frames cannot navigate the tab
-- The focus-blocking helper script deactivates itself in frames that are not embedded by the extension's new tab page
+- The focus-blocking helper script deactivates itself in top-level pages and in frames that are not embedded by the extension's new tab page, so sites you visit directly keep their normal autofocus
 - News category slugs read from synced storage are validated against a known-slug whitelist before being interpolated into URLs
 - Clicking any link or pressing Escape breaks out of the iframe, restoring full browser functionality
 

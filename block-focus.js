@@ -1,15 +1,18 @@
 // Block all focus-stealing during page load. Runs at document_start in MAIN world.
 (function () {
-    // Registered content scripts match by origin, not tab, so this can also be
-    // injected into unrelated tabs that happen to load the same site. When
-    // framed, only act if the top-level page is an extension page (our NTP) —
-    // otherwise we'd suppress focus() and hijack link clicks in frames that
-    // have nothing to do with us.
-    if (window.top !== window) {
-        const ancestors = window.location.ancestorOrigins;
-        const topOrigin = (ancestors && ancestors.length ? ancestors[ancestors.length - 1] : '') ?? '';
-        if (!topOrigin.startsWith('chrome-extension://')) return;
-    }
+    // Registered content scripts match by origin, not tab, so this is also
+    // injected into unrelated tabs that happen to load the same site. Focus
+    // blocking only ever applies inside the NTP's iframe (with it off, the tab
+    // navigates directly and no script is needed), so a top-level document is
+    // never ours — bail, or we'd kill autofocus on the site everywhere.
+    if (window.top === window) return;
+
+    // When framed, only act if the top-level page is an extension page (our
+    // NTP) — otherwise we'd suppress focus() and hijack link clicks in frames
+    // that have nothing to do with us.
+    const ancestors = window.location.ancestorOrigins;
+    const topOrigin = (ancestors && ancestors.length ? ancestors[ancestors.length - 1] : '') ?? '';
+    if (!topOrigin.startsWith('chrome-extension://')) return;
 
     const BLOCK_MS = 2000;
 
@@ -46,26 +49,24 @@
         observer.disconnect();
     }, BLOCK_MS);
 
-    // When inside an iframe, intercept navigation to break out of the sandbox.
-    // Link clicks navigate the top-level page (restoring full cookies/auth).
-    // Escape key does the same for the current page.
-    if (window.top !== window) {
-        document.addEventListener('click', (e) => {
-            const link = /** @type {HTMLAnchorElement | null} */ (
-                /** @type {Element} */ (e.target).closest('a[href]')
-            );
-            if (!link) return;
-            if (link.target === '_blank') return; // let popups open normally
-            if (!link.href.startsWith('http')) return;
-            e.preventDefault();
-            e.stopPropagation();
-            window.top?.postMessage({ type: 'kagi-navigate', url: link.href }, '*');
-        }, true);
+    // Intercept navigation to break out of the sandbox: link clicks navigate
+    // the top-level page (restoring full cookies/auth); Escape does the same
+    // for the current page.
+    document.addEventListener('click', (e) => {
+        const link = /** @type {HTMLAnchorElement | null} */ (
+            /** @type {Element} */ (e.target).closest('a[href]')
+        );
+        if (!link) return;
+        if (link.target === '_blank') return; // let popups open normally
+        if (!link.href.startsWith('http')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        window.top?.postMessage({ type: 'kagi-navigate', url: link.href }, '*');
+    }, true);
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                window.top?.postMessage({ type: 'kagi-navigate', url: window.location.href }, '*');
-            }
-        });
-    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            window.top?.postMessage({ type: 'kagi-navigate', url: window.location.href }, '*');
+        }
+    });
 })();
